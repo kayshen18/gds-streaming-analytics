@@ -1,0 +1,16 @@
+{
+  "input_count": 100,
+  "envelope_valid_count": 90,
+  "business_valid_count": 80,
+  "dead_letter_count": 20,
+  "airline_metrics": {
+    "CA": {
+      "successful_response_records": 60,
+      "success_token_count": 70
+    },
+    "MU": {
+      "successful_response_records": 10,
+      "success_token_count": 10
+    }
+  }
+}
