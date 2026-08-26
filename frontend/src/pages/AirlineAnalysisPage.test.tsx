@@ -13,6 +13,11 @@ import AirlineAnalysisPage from './AirlineAnalysisPage'
 vi.mock('../api/client', () => ({
   getAirlines: vi.fn(),
 }))
+vi.mock('./AirlineTimelineSection', () => ({
+  default: () => (
+    <section aria-label="Airline timeline section" />
+  ),
+}))
 
 
 const getAirlinesMock = vi.mocked(getAirlines)
@@ -51,6 +56,12 @@ describe('AirlineAnalysisPage', () => {
     expect(
       await screen.findByRole('table', {
         name: 'Airline rankings',
+      }),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByRole('region', {
+        name: 'Airline timeline section',
       }),
     ).toBeInTheDocument()
 

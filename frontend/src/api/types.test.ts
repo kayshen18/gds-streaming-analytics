@@ -3,7 +3,9 @@ import { expectTypeOf, test } from 'vitest'
 import type {
   AirlineSummary,
   AirlinesResponse,
+  AirlineTimelineResponse,
   OverviewResponse,
+  TimelinePoint,
 } from './types'
 
 
@@ -42,4 +44,26 @@ test('AirlinesResponse describes ranked airline results', () => {
   ).toEqualTypeOf<number>()
   expectTypeOf(response.total_airlines).toEqualTypeOf<number>()
   expectTypeOf(response.items).toEqualTypeOf<AirlineSummary[]>()
+})
+
+test('AirlineTimelineResponse describes hourly airline data', () => {
+  const point: TimelinePoint = {
+    stat_date: '2018-08-30',
+    stat_hour: 0,
+    successful_response_records: 4174,
+    success_token_count: 8622,
+  }
+
+  const response: AirlineTimelineResponse = {
+    airline_code: 'CA',
+    items: [point],
+  }
+
+  expectTypeOf(point.stat_date).toEqualTypeOf<string>()
+  expectTypeOf(point.stat_hour).toEqualTypeOf<number>()
+  expectTypeOf(
+    point.successful_response_records,
+  ).toEqualTypeOf<number>()
+  expectTypeOf(response.airline_code).toEqualTypeOf<string>()
+  expectTypeOf(response.items).toEqualTypeOf<TimelinePoint[]>()
 })

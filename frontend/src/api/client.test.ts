@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getAirlines, getOverview } from './client'
+import {
+  getAirlines,
+  getAirlineTimeline,
+  getOverview,
+} from './client'
 
 const overviewPayload = {
   metric_rows: 3203,
@@ -103,6 +107,61 @@ describe('getAirlines', () => {
 
     await expect(getAirlines(0)).rejects.toThrow(
       'Airlines request failed with status 422',
+    )
+  })
+})
+
+describe('getAirlineTimeline', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('normalizes the code and requests its timeline', async () => {
+    const timelinePayload = {
+      airline_code: 'CA',
+      items: [
+        {
+          stat_date: '2018-08-30',
+          stat_hour: 0,
+          successful_response_records: 4174,
+          success_token_count: 8622,
+        },
+      ],
+    }
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(timelinePayload),
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getAirlineTimeline(' ca '),
+    ).resolves.toEqual(timelinePayload)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/airlines/CA/timeline',
+      {
+        headers: {
+          Accept: 'application/json',
+        },
+      },
+    )
+  })
+
+  it('rejects when the airline timeline is unavailable', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getAirlineTimeline('NOTREAL'),
+    ).rejects.toThrow(
+      'Airline timeline request failed with status 404',
     )
   })
 })

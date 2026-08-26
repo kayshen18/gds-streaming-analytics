@@ -6,6 +6,7 @@ import {
 
 import { getAirlines } from '../api/client'
 import type { AirlinesResponse } from '../api/types'
+import AirlineTimelineSection from './AirlineTimelineSection'
 
 
 const DEFAULT_LIMIT = 10
@@ -110,6 +111,12 @@ function AirlineAnalysisPage() {
               </tbody>
             </table>
           </div>
+          <AirlineTimelineSection
+            key={airlines.items
+              .map((airline) => airline.airline_code)
+              .join('-')}
+            airlines={airlines.items}
+          />
         </>
       )}
     </>
