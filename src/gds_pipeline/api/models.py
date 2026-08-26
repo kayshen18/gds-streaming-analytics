@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
 HourOfDay = Annotated[int, Field(ge=0, le=23)]
+AirlineCode = Annotated[str, Field(min_length=1, max_length=8)]
 
 
 class ErrorDetail(BaseModel):
@@ -39,3 +40,13 @@ class TimelinePoint(BaseModel):
 
 class TimelineResponse(BaseModel):
     items: list[TimelinePoint]
+
+class AirlineSummary(BaseModel):
+    airline_code: AirlineCode
+    successful_response_records: NonNegativeInt
+    success_token_count: NonNegativeInt
+
+
+class AirlinesResponse(BaseModel):
+    total_airlines: NonNegativeInt
+    items: list[AirlineSummary]

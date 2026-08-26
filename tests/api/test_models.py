@@ -1,6 +1,8 @@
 import pytest
 from pydantic import ValidationError
 from gds_pipeline.api.models import (
+    AirlineSummary,
+    AirlinesResponse,
     ErrorDetail,
     ErrorResponse,
     HealthResponse,
@@ -111,4 +113,35 @@ def test_timeline_point_rejects_invalid_hours(
             stat_hour=invalid_hour,
             successful_response_records=120,
             success_token_count=205,
+        )
+
+def test_airlines_response_accepts_ranked_summaries() -> None:
+    response = AirlinesResponse(
+        total_airlines=198,
+        items=[
+            AirlineSummary(
+                airline_code="CA",
+                successful_response_records=500,
+                success_token_count=820,
+            ),
+            AirlineSummary(
+                airline_code="MU",
+                successful_response_records=420,
+                success_token_count=700,
+            ),
+        ],
+    )
+
+    assert response.total_airlines == 198
+    assert len(response.items) == 2
+    assert response.items[0].airline_code == "CA"
+    assert response.items[1].successful_response_records == 420
+
+
+def test_airline_summary_rejects_blank_code() -> None:
+    with pytest.raises(ValidationError):
+        AirlineSummary(
+            airline_code="",
+            successful_response_records=500,
+            success_token_count=820,
         )

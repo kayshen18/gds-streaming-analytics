@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 
 from gds_pipeline.api.config import ApiSettings
 from gds_pipeline.api.database import (
@@ -12,6 +12,7 @@ from gds_pipeline.api.errors import (
     install_error_handlers,
 )
 from gds_pipeline.api.models import (
+    AirlinesResponse,
     HealthResponse,
     OverviewResponse,
     TimelineResponse,
@@ -25,6 +26,10 @@ from gds_pipeline.api.timeline_repository import (
     TimelineReader,
     TimelineRepository,
 )
+from gds_pipeline.api.airlines_repository import (
+    AirlinesReader,
+    AirlinesRepository,
+)
 
 
 class AlwaysReadyDatabase:
@@ -36,6 +41,7 @@ def create_app(
     database: ReadinessProbe | None = None,
     overview_repository: OverviewReader | None = None,
     timeline_repository: TimelineReader | None = None,
+    airlines_repository: AirlinesReader | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="GDS Streaming Analytics API",
@@ -52,6 +58,9 @@ def create_app(
 
     if timeline_repository is None:
         timeline_repository = TimelineRepository(database)
+
+    if airlines_repository is None:
+        airlines_repository = AirlinesRepository(database)
 
     @app.get(
         "/api/v1/health",
@@ -98,6 +107,14 @@ def create_app(
     )
     def timeline() -> TimelineResponse:
         return timeline_repository.fetch_timeline()
+    @app.get(
+        "/api/v1/airlines",
+        response_model=AirlinesResponse,
+    )
+    def airlines(
+        limit: int = Query(default=20, ge=1, le=100),
+    ) -> AirlinesResponse:
+        return airlines_repository.fetch_airlines(limit=limit)
 
     return app
 
