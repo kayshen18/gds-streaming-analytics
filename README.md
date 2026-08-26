@@ -63,6 +63,30 @@ Outputs:
 
 See `docs/data-dictionary.md` for exact metric semantics. In particular, a success token is not claimed to represent a ticket or passenger.
 
+## Verified full-dataset baseline
+
+The supplied local source was processed twice. Deterministic CSV/JSON artifacts from both runs had identical SHA-256 hashes.
+
+| Measurement | Result |
+|---|---:|
+| Source size | 211,615,939 bytes |
+| Source SHA-256 | `301356b0877d4a2afb2f6c904487654ea1083f03a77e7f7c4e00cd4e62df85a7` |
+| Physical records | 2,563,566 |
+| Valid records | 2,560,708 |
+| Invalid records | 2,858 |
+| ITARES records | 1,278,977 |
+| ITAREQ records | 1,281,731 |
+| Hour-airline result groups | 3,203 |
+| Observed airline codes | 198 |
+| Successful response records | 1,310,068 |
+| Success tokens | 2,145,511 |
+| Duplicate groups | 1 |
+| Duplicate copies after the first | 2,857 |
+
+All invalid records in this source are copies of the comma-only record `,,,,,,,,`, classified as `missing_group_id`. The two measured runs took approximately 50.8–51.8 seconds using Python 3.12 on Windows against the same NTFS working tree, equivalent to roughly 49,500–50,400 physical records per second.
+
+The earlier course report stated 2,145,510 success tokens, one fewer than this independently reproduced baseline. This discrepancy is retained explicitly for later investigation rather than forcing the new output to match the old report.
+
 ## Planned phases
 
 1. Validate this baseline against the full 2.56-million-line source.
