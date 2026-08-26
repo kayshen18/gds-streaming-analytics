@@ -1,0 +1,2 @@
+tests/fixtures/mysql_snapshot/*.csv text eol=lf
+tests/fixtures/mysql_snapshot/*.json text eol=lf

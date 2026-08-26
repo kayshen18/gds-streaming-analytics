@@ -70,6 +70,11 @@ class MySQLRepository:
                 if existing is not None:
                     return self._result(existing, "unchanged", snapshot)
 
+            # With autocommit disabled, the advisory-lock SELECT starts an
+            # implicit transaction.  Advisory locks survive COMMIT, so end
+            # that read transaction before opening the explicit publication
+            # transaction below.
+            connection.commit()
             connection.start_transaction()
             cursor.execute(
                 """

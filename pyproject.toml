@@ -29,4 +29,5 @@ markers = [
     "integration: requires an explicitly enabled local Kafka broker",
     "spark_hdfs_integration: requires explicitly enabled Docker Spark and HDFS",
     "spark_pipeline_integration: requires explicitly enabled Kafka, Spark, and HDFS",
+    "mysql_integration: requires explicitly enabled Docker MySQL",
 ]

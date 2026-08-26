@@ -176,7 +176,9 @@ def test_publish_replaces_serving_snapshot_and_releases_lock() -> None:
     ]
     assert {row[5] for row in state.serving} == {result.publication_id}
     assert state.publications[-1]["status"] == "published"
-    assert connection.commit_count == 1
+    # One commit ends the implicit preflight SELECT transaction; the second
+    # atomically publishes the serving snapshot.
+    assert connection.commit_count == 2
     assert not state.locked
     assert connection.closed
 
@@ -275,5 +277,6 @@ def test_insert_failure_rolls_back_and_records_failed_audit() -> None:
     assert state.publications[-1]["status"] == "failed"
     assert "injected staging insert failure" in state.publications[-1]["failure_message"]
     assert connection.rollback_count == 1
-    assert connection.commit_count == 1
+    # Preflight commit plus the independent failed-audit commit.
+    assert connection.commit_count == 2
     assert not state.locked
