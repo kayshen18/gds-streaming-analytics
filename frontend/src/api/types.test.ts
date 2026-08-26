@@ -1,4 +1,4 @@
-import { expectTypeOf, test } from 'vitest'
+import { expect, expectTypeOf, it, test } from 'vitest'
 
 import type {
   AirlineSummary,
@@ -6,6 +6,7 @@ import type {
   AirlineTimelineResponse,
   OverviewResponse,
   TimelinePoint,
+  TimelineResponse,
 } from './types'
 
 
@@ -66,4 +67,27 @@ test('AirlineTimelineResponse describes hourly airline data', () => {
   ).toEqualTypeOf<number>()
   expectTypeOf(response.airline_code).toEqualTypeOf<string>()
   expectTypeOf(response.items).toEqualTypeOf<TimelinePoint[]>()
+})
+
+it('accepts the global timeline response', () => {
+  const response: TimelineResponse = {
+    items: [
+      {
+        stat_date: '2018-08-30',
+        stat_hour: 0,
+        successful_response_records: 25521,
+        success_token_count: 46434,
+      },
+      {
+        stat_date: '2018-08-30',
+        stat_hour: 23,
+        successful_response_records: 43103,
+        success_token_count: 77030,
+      },
+    ],
+  }
+
+  expect(response.items).toHaveLength(2)
+  expect(response.items[0].stat_hour).toBe(0)
+  expect(response.items[1].stat_hour).toBe(23)
 })

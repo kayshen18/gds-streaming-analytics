@@ -27,6 +27,9 @@ export interface TimelinePoint {
   success_token_count: number
 }
 
+export interface TimelineResponse {
+  items: TimelinePoint[]
+}
 
 export interface AirlineTimelineResponse {
   airline_code: string

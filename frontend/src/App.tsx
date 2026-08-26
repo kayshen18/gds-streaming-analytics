@@ -3,16 +3,8 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import './App.css'
 import AirlineAnalysisPage from './pages/AirlineAnalysisPage'
 import OverviewPage from './pages/OverviewPage'
+import TimeAnalysisPage from './pages/TimeAnalysisPage'
 
-
-function TimeAnalysisPage() {
-  return (
-    <>
-      <h2>Time Analysis</h2>
-      <p>Hourly timeline and heatmap content will appear here.</p>
-    </>
-  )
-}
 
 
 function PipelinePage() {

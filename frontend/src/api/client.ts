@@ -2,6 +2,7 @@ import type {
   AirlinesResponse,
   AirlineTimelineResponse,
   OverviewResponse,
+  TimelineResponse,
 } from './types'
 
 export async function getOverview(): Promise<OverviewResponse> {
@@ -64,4 +65,20 @@ export async function getAirlineTimeline(
   }
 
   return (await response.json()) as AirlineTimelineResponse
+}
+
+export async function getTimeline(): Promise<TimelineResponse> {
+  const response = await fetch('/api/v1/timeline', {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `Timeline request failed with status ${response.status}`,
+    )
+  }
+
+  return (await response.json()) as TimelineResponse
 }
