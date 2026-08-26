@@ -122,6 +122,7 @@ def test_spark_defaults_and_submit_scripts_use_pinned_contract() -> None:
     assert "spark-sql-kafka-0-10_2.13:4.1.3" in defaults
     assert "set -euo pipefail" in submit
     assert "spark-submit" in submit
+    assert "PYTHONPATH=/opt/gds-app/src" in submit
     assert "set -euo pipefail" in smoke
     assert "tee" in smoke
     assert "mktemp" in smoke
