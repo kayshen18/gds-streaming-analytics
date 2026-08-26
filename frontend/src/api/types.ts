@@ -48,3 +48,20 @@ export interface HourlyHeatmapResponse {
   hours: number[]
   cells: HeatmapCell[]
 }
+
+export interface HealthResponse {
+  status: 'ok'
+  service: 'gds-analytics-api'
+}
+
+export interface PublicationResponse {
+  publication_id: string
+  source_hdfs_root: string
+  output_version: string
+  source_row_count: number
+  successful_response_records: number
+  success_token_count: number
+  metrics_sha256: string
+  status: 'published'
+  completed_at: string
+}

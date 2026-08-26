@@ -9,6 +9,8 @@ import type {
   TimelineResponse,
   HeatmapCell,
   HourlyHeatmapResponse,
+  HealthResponse,
+  PublicationResponse,
 } from './types'
 
 
@@ -120,4 +122,39 @@ test('HourlyHeatmapResponse describes heatmap axes and cells', () => {
   expectTypeOf(response.airlines).toEqualTypeOf<string[]>()
   expectTypeOf(response.hours).toEqualTypeOf<number[]>()
   expectTypeOf(response.cells).toEqualTypeOf<HeatmapCell[]>()
+})
+
+test('HealthResponse describes API readiness', () => {
+  const response: HealthResponse = {
+    status: 'ok',
+    service: 'gds-analytics-api',
+  }
+
+  expectTypeOf(response.status).toEqualTypeOf<'ok'>()
+  expectTypeOf(
+    response.service,
+  ).toEqualTypeOf<'gds-analytics-api'>()
+})
+
+test('PublicationResponse describes published snapshot metadata', () => {
+  const response: PublicationResponse = {
+    publication_id: '126fa842-3721-4233-991f-8fd3b9e22929',
+    source_hdfs_root:
+      'hdfs://hdfs-namenode:8020/data/gds-full/v1-full-20260813-123126',
+    output_version: 'v1',
+    source_row_count: 3203,
+    successful_response_records: 1310068,
+    success_token_count: 2145511,
+    metrics_sha256:
+      '9b0f4a3afc33e73461414ff2d60a2653e32a5fdbcfe8a810b8b2b42525fcc0be',
+    status: 'published',
+    completed_at: '2026-08-13T14:15:19.385388',
+  }
+
+  expectTypeOf(response.publication_id).toEqualTypeOf<string>()
+  expectTypeOf(response.source_hdfs_root).toEqualTypeOf<string>()
+  expectTypeOf(response.source_row_count).toEqualTypeOf<number>()
+  expectTypeOf(response.metrics_sha256).toEqualTypeOf<string>()
+  expectTypeOf(response.status).toEqualTypeOf<'published'>()
+  expectTypeOf(response.completed_at).toEqualTypeOf<string>()
 })

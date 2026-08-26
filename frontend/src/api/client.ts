@@ -4,6 +4,8 @@ import type {
   OverviewResponse,
   TimelineResponse,
   HourlyHeatmapResponse,
+  HealthResponse,
+  PublicationResponse,
 } from './types'
 
 export async function getOverview(): Promise<OverviewResponse> {
@@ -103,4 +105,37 @@ export async function getHourlyHeatmap(
   }
 
   return (await response.json()) as HourlyHeatmapResponse
+}
+
+export async function getHealth(): Promise<HealthResponse> {
+  const response = await fetch('/api/v1/health', {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `Health request failed with status ${response.status}`,
+    )
+  }
+
+  return (await response.json()) as HealthResponse
+}
+
+export async function getPublication():
+Promise<PublicationResponse> {
+  const response = await fetch('/api/v1/publication', {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `Publication request failed with status ${response.status}`,
+    )
+  }
+
+  return (await response.json()) as PublicationResponse
 }

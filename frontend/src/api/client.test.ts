@@ -6,6 +6,8 @@ import {
   getOverview,
   getTimeline,
   getHourlyHeatmap,
+  getHealth,
+  getPublication,
 } from './client'
 
 const overviewPayload = {
@@ -278,6 +280,109 @@ describe('getHourlyHeatmap', () => {
       getHourlyHeatmap(0),
     ).rejects.toThrow(
       'Hourly heatmap request failed with status 422',
+    )
+  })
+})
+
+describe('getHealth', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('requests and returns API health', async () => {
+    const healthPayload = {
+      status: 'ok',
+      service: 'gds-analytics-api',
+    }
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(healthPayload),
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getHealth()).resolves.toEqual(
+      healthPayload,
+    )
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/health',
+      {
+        headers: {
+          Accept: 'application/json',
+        },
+      },
+    )
+  })
+
+  it('rejects when the health request fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getHealth()).rejects.toThrow(
+      'Health request failed with status 503',
+    )
+  })
+})
+
+describe('getPublication', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('requests and returns publication metadata', async () => {
+    const publicationPayload = {
+      publication_id: '126fa842-3721-4233-991f-8fd3b9e22929',
+      source_hdfs_root:
+        'hdfs://hdfs-namenode:8020/data/gds-full/v1-full-20260813-123126',
+      output_version: 'v1',
+      source_row_count: 3203,
+      successful_response_records: 1310068,
+      success_token_count: 2145511,
+      metrics_sha256:
+        '9b0f4a3afc33e73461414ff2d60a2653e32a5fdbcfe8a810b8b2b42525fcc0be',
+      status: 'published',
+      completed_at: '2026-08-13T14:15:19.385388',
+    }
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(publicationPayload),
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getPublication(),
+    ).resolves.toEqual(publicationPayload)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/publication',
+      {
+        headers: {
+          Accept: 'application/json',
+        },
+      },
+    )
+  })
+
+  it('rejects when publication metadata is unavailable', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getPublication(),
+    ).rejects.toThrow(
+      'Publication request failed with status 404',
     )
   })
 })

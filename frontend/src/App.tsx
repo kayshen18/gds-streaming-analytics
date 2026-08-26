@@ -4,17 +4,9 @@ import './App.css'
 import AirlineAnalysisPage from './pages/AirlineAnalysisPage'
 import OverviewPage from './pages/OverviewPage'
 import TimeAnalysisPage from './pages/TimeAnalysisPage'
+import PipelinePage from './pages/PipelinePage'
 
 
-
-function PipelinePage() {
-  return (
-    <>
-      <h2>Pipeline &amp; Data Quality</h2>
-      <p>Publication and pipeline status will appear here.</p>
-    </>
-  )
-}
 
 
 function App() {
