@@ -10,3 +10,6 @@ outputs/*
 !outputs/.gitkeep
 .checkpoints/
 benchmarks/local/
+.ivy2/
+spark-events/
+infrastructure/spark-hdfs/runtime/

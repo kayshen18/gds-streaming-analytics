@@ -1,0 +1,87 @@
+name: gds-bigdata
+
+x-hadoop-common: &hadoop-common
+  image: apache/hadoop:3.5.0
+  user: "0:0"
+  environment:
+    HADOOP_CONF_DIR: /opt/hadoop/etc/hadoop
+  volumes:
+    - ./hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+    - ./hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+  restart: unless-stopped
+
+services:
+  hdfs-namenode-init:
+    <<: *hadoop-common
+    container_name: gds-hdfs-namenode-init
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - >-
+        if [[ -f /data/dfs/name/current/VERSION ]]; then
+          echo 'NameNode metadata already initialized; preserving existing data';
+        else
+          echo 'Formatting NameNode metadata for first use';
+          hdfs namenode -format -nonInteractive gds-streaming-analytics;
+        fi
+    volumes:
+      - ./hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - hdfs-namenode-data:/data/dfs/name
+    healthcheck:
+      disable: true
+    mem_limit: 768m
+    cpus: 0.5
+
+  hdfs-namenode:
+    <<: *hadoop-common
+    container_name: gds-hdfs-namenode
+    hostname: hdfs-namenode
+    command: ["hdfs", "namenode"]
+    depends_on:
+      hdfs-namenode-init:
+        condition: service_completed_successfully
+    environment:
+      HADOOP_CONF_DIR: /opt/hadoop/etc/hadoop
+      ENSURE_NAMENODE_DIR: /data/dfs/name
+    ports:
+      - "9870:9870"
+    volumes:
+      - ./hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - hdfs-namenode-data:/data/dfs/name
+    healthcheck:
+      test: ["CMD-SHELL", "hdfs dfsadmin -safemode get >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 20s
+    mem_limit: 1536m
+    cpus: 1.0
+
+  hdfs-datanode:
+    <<: *hadoop-common
+    container_name: gds-hdfs-datanode
+    hostname: hdfs-datanode
+    command: ["hdfs", "datanode"]
+    depends_on:
+      hdfs-namenode:
+        condition: service_healthy
+    volumes:
+      - ./hadoop/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - hdfs-datanode-data:/data/dfs/data
+    healthcheck:
+      test: ["CMD-SHELL", "hdfs dfsadmin -report 2>/dev/null | grep -q 'Live datanodes (1)'"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 20s
+    mem_limit: 1536m
+    cpus: 1.0
+
+volumes:
+  hdfs-namenode-data:
+    name: gds-hdfs-namenode-data
+  hdfs-datanode-data:
+    name: gds-hdfs-datanode-data
