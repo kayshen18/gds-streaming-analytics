@@ -4,6 +4,7 @@ from gds_pipeline.api.models import (
     ErrorDetail,
     ErrorResponse,
     HealthResponse,
+    OverviewResponse,
 )
 
 from gds_pipeline.api.models import HealthResponse
@@ -42,3 +43,34 @@ def test_error_response_uses_a_nested_envelope() -> None:
             "message": "date_from must not be later than date_to",
         }
     }
+
+def test_overview_response_accepts_dashboard_summary() -> None:
+    response = OverviewResponse(
+        metric_rows=3203,
+        airline_count=46,
+        successful_response_records=1310068,
+        success_token_count=2145511,
+        start_date="2016-06-01",
+        end_date="2016-06-30",
+        publication_id="126fa842-3721-4233-991f-8fd3b9e22929",
+    )
+
+    assert response.metric_rows == 3203
+    assert response.airline_count == 46
+    assert response.successful_response_records == 1310068
+    assert response.success_token_count == 2145511
+    assert response.start_date.isoformat() == "2016-06-01"
+    assert response.end_date.isoformat() == "2016-06-30"
+
+
+def test_overview_response_rejects_negative_counts() -> None:
+    with pytest.raises(ValidationError):
+        OverviewResponse(
+            metric_rows=-1,
+            airline_count=46,
+            successful_response_records=1310068,
+            success_token_count=2145511,
+            start_date="2016-06-01",
+            end_date="2016-06-30",
+            publication_id="126fa842-3721-4233-991f-8fd3b9e22929",
+        )

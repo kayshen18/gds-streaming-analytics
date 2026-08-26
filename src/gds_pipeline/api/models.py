@@ -1,6 +1,9 @@
-from typing import Literal
+from datetime import date
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+NonNegativeInt = Annotated[int, Field(ge=0)]
 
 
 class ErrorDetail(BaseModel):
@@ -15,3 +18,13 @@ class ErrorResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     service: Literal["gds-analytics-api"]
+
+
+class OverviewResponse(BaseModel):
+    metric_rows: NonNegativeInt
+    airline_count: NonNegativeInt
+    successful_response_records: NonNegativeInt
+    success_token_count: NonNegativeInt
+    start_date: date
+    end_date: date
+    publication_id: str
