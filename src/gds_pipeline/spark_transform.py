@@ -140,3 +140,77 @@ def parse_gds_records(df: DataFrame) -> tuple[DataFrame, DataFrame]:
         "failure_reason",
     )
     return clean, dead
+
+
+def success_token_rows(clean_df: DataFrame) -> DataFrame:
+    """Emit one row for every airline success token in an ITARES event."""
+
+    token_pattern = r"(?<![A-Z0-9])([A-Z0-9]{2}):success(?![A-Za-z])"
+    response_rows = clean_df.filter(F.col("log_type") == "ITARES").withColumn(
+        "success_tokens",
+        F.regexp_extract_all(F.col("raw_line"), F.lit(token_pattern), F.lit(1)),
+    )
+    return response_rows.select(
+        *[column for column in clean_df.columns],
+        F.posexplode("success_tokens").alias("token_ordinal", "airline_code"),
+    )
+
+
+def hourly_airline_deltas(clean_df: DataFrame, batch_id: int) -> DataFrame:
+    """Compute the two approved hourly airline metrics for one batch."""
+
+    tokens = success_token_rows(clean_df)
+    dimensions = ["event_date", "event_hour", "airline_code"]
+    token_counts = tokens.groupBy(*dimensions).agg(
+        F.count(F.lit(1)).cast("long").alias("success_token_count")
+    )
+    response_counts = (
+        tokens.select(*dimensions, "event_id")
+        .dropDuplicates([*dimensions, "event_id"])
+        .groupBy(*dimensions)
+        .agg(
+            F.count(F.lit(1))
+            .cast("long")
+            .alias("successful_response_records")
+        )
+    )
+    return response_counts.join(token_counts, dimensions, "inner").select(
+        F.lit(batch_id).cast("long").alias("batch_id"),
+        *dimensions,
+        "successful_response_records",
+        "success_token_count",
+    )
+
+
+def quality_metrics(
+    input_df: DataFrame,
+    raw_df: DataFrame,
+    clean_df: DataFrame,
+    dead_df: DataFrame,
+    batch_id: int,
+) -> DataFrame:
+    """Produce auditable batch counts and counts by dead-letter reason."""
+
+    spark = input_df.sparkSession
+    summary_schema = (
+        "batch_id long, metric_name string, failure_stage string, "
+        "failure_reason string, metric_value long"
+    )
+    summary_rows = spark.createDataFrame(
+        [
+            (batch_id, "input_count", None, None, input_df.count()),
+            (batch_id, "envelope_valid_count", None, None, raw_df.count()),
+            (batch_id, "business_valid_count", None, None, clean_df.count()),
+        ],
+        schema=summary_schema,
+    )
+    dead_counts = dead_df.groupBy("failure_stage", "failure_reason").agg(
+        F.count(F.lit(1)).cast("long").alias("metric_value")
+    ).select(
+        F.lit(batch_id).cast("long").alias("batch_id"),
+        F.lit("dead_letter_count").alias("metric_name"),
+        "failure_stage",
+        "failure_reason",
+        "metric_value",
+    )
+    return summary_rows.unionByName(dead_counts)
