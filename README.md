@@ -1,26 +1,70 @@
 # Real-time GDS Booking Log Analytics Pipeline
 
-This repository is an independent reimplementation and planned extension of a team-based undergraduate laboratory project. All code here is rewritten from scratch. The current phase builds a deterministic offline baseline before introducing Kafka and Spark Structured Streaming.
+An independent reimplementation and modernization of an undergraduate team
+laboratory project. The repository currently provides a deterministic offline
+baseline plus a tested Kafka ingestion layer for 2.56 million real GDS booking
+log records. All implementation code was rewritten from scratch.
 
-## Why the offline baseline comes first
-
-A distributed job can finish successfully while producing incorrect counts. This analyzer creates a small, testable reference implementation whose output the later Spark pipeline must reproduce exactly.
-
-It streams the source file, classifies malformed records, measures duplicates, aggregates hourly airline metrics, and writes four auditable artifacts. It never loads the complete log into memory.
-
-## Current architecture
+## Implemented architecture
 
 ```text
 GDS text log
-    -> strict UTF-8 line parser
-    -> data-quality and duplicate profile
-    -> hourly airline aggregation
-    -> JSON and CSV reference artifacts
+    |-- offline profiler
+    |     |-- strict UTF-8 parsing and data-quality classification
+    |     `-- deterministic hourly-airline reference metrics
+    |
+    `-- Python Kafka producer
+          |-- versioned JSON envelope and stable event_id
+          |-- acks=all and idempotent client retries
+          |-- rate limiting and asynchronous delivery accounting
+          `-- atomic contiguous checkpoint
+                    |
+                    v
+          Kafka 4.3.1 / KRaft / gds.raw.v1 / 3 partitions
+                    |
+                    `-- independent verifier
+                          |-- earliest offsets, fresh consumer group
+                          |-- schema, event_id, and Kafka-key validation
+                          `-- invalid, duplicate, and partition accounting
 ```
 
-Kafka, Spark, HDFS, PostgreSQL, APIs, and dashboards are deliberately deferred until this baseline is verified.
+The next layer will consume `gds.raw.v1` with Spark Structured Streaming,
+archive clean records as HDFS Parquet, route malformed records to a dead-letter
+path, and write idempotent hourly aggregates to PostgreSQL.
 
-## WSL setup
+## Why the offline baseline comes first
+
+A distributed job can finish successfully while producing incorrect counts.
+The offline profiler is a small, auditable reference implementation whose
+results the later Spark pipeline must reproduce. It streams the file instead of
+loading it fully into memory and writes deterministic JSON and CSV artifacts.
+
+## Event contract and delivery semantics
+
+Every physical source line becomes a UTF-8 JSON event containing:
+
+- `schema_version`
+- stable SHA-256 `event_id`
+- source filename and source-file SHA-256
+- physical source line number
+- `group_id`
+- unmodified raw line
+- UTC production timestamp
+
+The canonical event identity is SHA-256 over
+`1\n{source_sha256}\n{line_number}\n{raw_line}`. The timestamp is not part of
+the identity, so retries of the same source record remain detectable.
+
+The producer provides **at-least-once delivery**, not end-to-end exactly once.
+Kafka acknowledgements can arrive out of order, so the checkpoint advances only
+over a contiguous run of confirmed source lines. A crash after a broker
+acknowledgement but before a checkpoint write can reproduce a boundary event;
+the stable `event_id` allows downstream deduplication.
+
+## Local setup
+
+Requirements: WSL2, Python 3.11+, Docker Desktop with WSL integration, and
+Docker Compose.
 
 ```bash
 cd /mnt/c/Users/juno-/Documents/Codex/2026-08-10/linux-shell-fpga/gds-streaming-analytics/.worktrees/offline-baseline
@@ -29,43 +73,62 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ```
 
-Run the tests:
+Start Kafka and create the raw topic:
 
 ```bash
-pytest -v
+bash scripts/kafka-up.sh
+bash scripts/kafka-create-topic.sh
 ```
 
-Run the publishable fixture:
+See [`docs/kafka-runbook.md`](docs/kafka-runbook.md) for safe stop/reset,
+checkpoint recovery, offset inspection, integration tests, and diagnostics.
+
+## Commands
+
+Run the offline profiler:
 
 ```bash
 gds-profile profile \
-  --input tests/fixtures/mixed_records.txt \
-  --output outputs/fixture-baseline \
-  --overwrite
-```
-
-## Full local run
-
-Copy the course-provided file to the ignored location described in `data/README.md`, then run:
-
-```bash
-gds-profile profile \
-  --input data/raw/kafka采集数据实验.txt \
+  --input "data/raw/kafka采集数据实验.txt" \
   --output outputs/full-baseline
 ```
 
-Outputs:
+Run a 100-record Kafka smoke test:
 
-- `profile.json`: source identity, quality counts, dimensions, duplicates, and runtime.
-- `hourly_airline_metrics.csv`: both hourly success metrics by airline.
-- `invalid_records.csv`: retained malformed records with stable reasons.
-- `duplicate_summary.json`: repeated SHA-256 fingerprints without raw record disclosure.
+```bash
+gds-kafka produce \
+  --input "data/raw/kafka采集数据实验.txt" \
+  --bootstrap-servers localhost:9092 \
+  --topic gds.raw.v1 \
+  --limit 100 \
+  --rate 1000 \
+  --checkpoint .checkpoints/smoke.json \
+  --reset-checkpoint
 
-See `docs/data-dictionary.md` for exact metric semantics. In particular, a success token is not claimed to represent a ticket or passenger.
+gds-kafka verify \
+  --bootstrap-servers localhost:9092 \
+  --topic gds.raw.v1 \
+  --expected-count 100 \
+  --idle-timeout 20
+```
 
-## Verified full-dataset baseline
+Run unit tests without touching Kafka:
 
-The supplied local source was processed twice. Deterministic CSV/JSON artifacts from both runs had identical SHA-256 hashes.
+```bash
+pytest -q
+```
+
+Explicitly run real-broker recovery tests:
+
+```bash
+RUN_KAFKA_INTEGRATION=1 \
+pytest tests/integration/test_kafka_recovery.py -v
+```
+
+## Verified source baseline
+
+The supplied source was processed twice offline. Deterministic CSV and JSON
+artifacts from both runs had identical SHA-256 hashes.
 
 | Measurement | Result |
 |---|---:|
@@ -83,14 +146,52 @@ The supplied local source was processed twice. Deterministic CSV/JSON artifacts 
 | Duplicate groups | 1 |
 | Duplicate copies after the first | 2,857 |
 
-All invalid records in this source are copies of the comma-only record `,,,,,,,,`, classified as `missing_group_id`. The two measured runs took approximately 50.8–51.8 seconds using Python 3.12 on Windows against the same NTFS working tree, equivalent to roughly 49,500–50,400 physical records per second.
+All invalid records are copies of the comma-only record `,,,,,,,,`, classified
+as `missing_group_id`. Two offline runs took 50.8-51.8 seconds on Windows Python
+3.12 against the same NTFS worktree, about 49,500-50,400 records per second.
 
-The earlier course report stated 2,145,510 success tokens, one fewer than this independently reproduced baseline. This discrepancy is retained explicitly for later investigation rather than forcing the new output to match the old report.
+The earlier course report stated 2,145,510 success tokens, one fewer than the
+independent baseline. The discrepancy is documented rather than forcing the new
+implementation to reproduce the old value.
 
-## Planned phases
+## Verified full Kafka benchmark
 
-1. Validate this baseline against the full 2.56-million-line source.
-2. Build a Python Kafka producer with rate control and delivery reporting.
-3. Reproduce the baseline using Spark Structured Streaming and checkpoints.
-4. Store clean Parquet data in HDFS and idempotent aggregates in PostgreSQL.
-5. Add an API, ECharts dashboard, fault-recovery experiments, and benchmarks.
+Measured locally on 2026-08-12 with Python 3.13.9, confluent-kafka 2.15.0,
+Kafka 4.3.1, Docker Engine 29.7.2, Docker Compose 5.3.1, and a WSL2 VM exposing
+15 GiB RAM. The single broker used three partitions and replication factor one.
+
+| Measurement | Result |
+|---|---:|
+| Source records submitted | 2,563,566 |
+| Broker acknowledgements | 2,563,566 |
+| Delivery failures | 0 |
+| Messages remaining after flush | 0 |
+| Final checkpoint line | 2,563,566 |
+| Partition 0 end offset | 867,964 |
+| Partition 1 end offset | 837,813 |
+| Partition 2 end offset | 857,789 |
+| Producer GNU wall time | 88.76 s |
+| Producer end-to-end throughput | ~28,884 records/s |
+| Producer maximum RSS | 73,648 KiB |
+| Verifier records read | 2,563,566 |
+| Verifier valid / invalid | 2,563,566 / 0 |
+| Verifier duplicate event IDs | 0 |
+| Verifier GNU wall time | 37.10 s |
+| Verifier throughput | ~69,099 records/s |
+| Verifier maximum RSS | 585,000 KiB |
+
+The producer's internal timer reported 81.656 seconds, but the table uses the
+more conservative GNU wall-clock measurement covering process startup and exit.
+Kafka remained healthy after both runs, no swap was used, and recent broker logs
+contained no matches for `error`, `exception`, `fatal`, or `outofmemory`.
+
+## Limitations
+
+- The local broker is a single combined controller/broker with replication
+  factor one; it does not demonstrate broker failover or high availability.
+- No authentication, TLS, or schema registry is configured in this local phase.
+- The in-memory duplicate detector stores every event ID; the measured full run
+  used about 571 MiB maximum RSS. Larger datasets should use a bounded or
+  external deduplication strategy.
+- Spark, HDFS Parquet, dead-letter handling, PostgreSQL aggregates, API, and
+  dashboard remain future phases and are not claimed as implemented.
