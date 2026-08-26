@@ -21,9 +21,9 @@ HEADER = (
 
 def _rows() -> tuple[MetricRow, ...]:
     return (
-        MetricRow("2016-06-02", 0, "MU", 2, 3),
-        MetricRow("2016-06-01", 10, "CA", 4, 7),
-        MetricRow("2016-06-01", 2, "CA", 1, 1),
+        MetricRow("20160602", 0, "MU", 2, 3),
+        MetricRow("20160601", 10, "CA", 4, 7),
+        MetricRow("20160601", 2, "CA", 1, 1),
     )
 
 
@@ -60,12 +60,12 @@ def test_canonical_bytes_use_exact_header_numeric_hour_sort_and_lf() -> None:
     actual = canonical_snapshot_bytes(_rows())
 
     assert actual == HEADER + (
-        b"2016-06-01,2,CA,1,1\n"
-        b"2016-06-01,10,CA,4,7\n"
-        b"2016-06-02,0,MU,2,3\n"
+        b"20160601,2,CA,1,1\n"
+        b"20160601,10,CA,4,7\n"
+        b"20160602,0,MU,2,3\n"
     )
     assert hashlib.sha256(actual).hexdigest() == (
-        "67b8f10790a5f09376e1a0fdc22b2b86bf4ac09c445ba57d3b42c32c6ddb817f"
+        "936116c57f13961a0906d8bdaa771bacaf9a6cfd8c7df459afdc86e9b2252505"
     )
 
 
@@ -92,13 +92,14 @@ def test_load_snapshot_validates_and_returns_totals(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("record", "message"),
     [
-        ("2016-02-30,1,CA,1,1\n", "stat_date"),
-        ("2016-06-01,24,CA,1,1\n", "stat_hour"),
-        ("2016-06-01,1,,1,1\n", "airline_code"),
-        ("2016-06-01,1,TOO-LONG-1,1,1\n", "airline_code"),
-        ("2016-06-01,1,CA,-1,1\n", "nonnegative"),
-        ("2016-06-01,1,CA,one,1\n", "integer"),
-        ("2016-06-01,1,CA,2,1\n", "below"),
+        ("20160230,1,CA,1,1\n", "stat_date"),
+        ("2016-06-01,1,CA,1,1\n", "stat_date"),
+        ("20160601,24,CA,1,1\n", "stat_hour"),
+        ("20160601,1,,1,1\n", "airline_code"),
+        ("20160601,1,TOO-LONG-1,1,1\n", "airline_code"),
+        ("20160601,1,CA,-1,1\n", "nonnegative"),
+        ("20160601,1,CA,one,1\n", "integer"),
+        ("20160601,1,CA,2,1\n", "below"),
     ],
 )
 def test_load_snapshot_rejects_invalid_metric_rows(
@@ -118,13 +119,13 @@ def test_load_snapshot_rejects_wrong_header_and_noncanonical_order(
 ) -> None:
     wrong_header = HEADER.replace(b"airline_code", b"carrier")
     paths = _write_snapshot(
-        tmp_path, wrong_header + b"2016-06-01,1,CA,1,1\n",
+        tmp_path, wrong_header + b"20160601,1,CA,1,1\n",
         row_count=1, response_total=1, token_total=1,
     )
     with pytest.raises(SnapshotValidationError, match="header"):
         load_snapshot(*paths)
 
-    unsorted = HEADER + b"2016-06-01,10,CA,1,1\n2016-06-01,2,CA,1,1\n"
+    unsorted = HEADER + b"20160601,10,CA,1,1\n20160601,2,CA,1,1\n"
     paths = _write_snapshot(
         tmp_path, unsorted, row_count=2, response_total=2, token_total=2
     )
@@ -133,7 +134,7 @@ def test_load_snapshot_rejects_wrong_header_and_noncanonical_order(
 
 
 def test_load_snapshot_rejects_duplicate_keys(tmp_path: Path) -> None:
-    payload = HEADER + b"2016-06-01,1,CA,1,1\n2016-06-01,1,CA,2,2\n"
+    payload = HEADER + b"20160601,1,CA,1,1\n20160601,1,CA,2,2\n"
     paths = _write_snapshot(
         tmp_path, payload, row_count=2, response_total=3, token_total=3
     )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
-from datetime import date
+from datetime import datetime
 import hashlib
 import io
 import json
@@ -174,11 +174,11 @@ def _parse_row(values: list[str], line_number: int) -> MetricRow:
 def _validate_row(row: MetricRow, line_number: int | None = None) -> None:
     prefix = f"line {line_number}: " if line_number is not None else ""
     try:
-        parsed_date = date.fromisoformat(row.stat_date)
+        parsed_date = datetime.strptime(row.stat_date, "%Y%m%d")
     except (TypeError, ValueError) as exc:
         raise SnapshotValidationError(f"{prefix}invalid stat_date") from exc
-    if parsed_date.isoformat() != row.stat_date:
-        raise SnapshotValidationError(f"{prefix}stat_date must be canonical ISO date")
+    if parsed_date.strftime("%Y%m%d") != row.stat_date:
+        raise SnapshotValidationError(f"{prefix}stat_date must use YYYYMMDD")
     if type(row.stat_hour) is not int or not 0 <= row.stat_hour <= 23:
         raise SnapshotValidationError(f"{prefix}stat_hour must be between 0 and 23")
     if not _AIRLINE_CODE.fullmatch(row.airline_code):

@@ -186,6 +186,7 @@ services:
         condition: service_healthy
     volumes:
       - ../../:/opt/gds-app:ro
+      - ./runtime:/opt/gds-runtime
       - ./hadoop:/opt/hadoop-conf:ro
       - ./spark:/opt/spark-conf:ro
       - spark-ivy-cache:/opt/spark/.ivy2
