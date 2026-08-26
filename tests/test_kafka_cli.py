@@ -2,6 +2,7 @@ from pathlib import Path
 
 from gds_pipeline.kafka_cli import main
 from gds_pipeline.producer import ProductionSummary
+from gds_pipeline.verifier import VerificationSummary
 
 
 def test_produce_command_maps_arguments(monkeypatch, tmp_path: Path) -> None:
@@ -126,3 +127,53 @@ def test_unflushed_messages_return_nonzero(monkeypatch, tmp_path: Path) -> None:
     )
 
     assert code == 6
+
+
+def test_verify_command_maps_arguments(monkeypatch, capsys) -> None:
+    captured = []
+
+    def fake_verify(settings):
+        captured.append(settings)
+        return VerificationSummary(100, 100, 0, 0, {0: 47, 1: 30, 2: 23})
+
+    monkeypatch.setattr("gds_pipeline.kafka_cli.verify_topic", fake_verify)
+
+    code = main(
+        [
+            "verify",
+            "--bootstrap-servers",
+            "localhost:9092",
+            "--topic",
+            "gds.raw.v1",
+            "--expected-count",
+            "100",
+            "--idle-timeout",
+            "20",
+        ]
+    )
+
+    assert code == 0
+    assert captured[0].expected_count == 100
+    assert captured[0].idle_timeout == 20
+    assert "partition_counts=0:47,1:30,2:23" in capsys.readouterr().out
+
+
+def test_verify_count_mismatch_returns_nonzero(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "gds_pipeline.kafka_cli.verify_topic",
+        lambda settings: VerificationSummary(99, 99, 0, 0, {0: 99}),
+    )
+
+    code = main(
+        [
+            "verify",
+            "--bootstrap-servers",
+            "localhost:9092",
+            "--topic",
+            "gds.raw.v1",
+            "--expected-count",
+            "100",
+        ]
+    )
+
+    assert code == 7

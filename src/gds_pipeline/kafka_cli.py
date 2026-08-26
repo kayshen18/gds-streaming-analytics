@@ -6,6 +6,7 @@ import sys
 
 from .kafka_config import ProducerSettings
 from .producer import produce_file
+from .verifier import VerifierSettings, verify_topic
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -20,6 +21,11 @@ def _parser() -> argparse.ArgumentParser:
     produce.add_argument("--checkpoint", type=Path)
     produce.add_argument("--reset-checkpoint", action="store_true")
     produce.add_argument("--flush-timeout", type=float, default=30.0)
+    verify = commands.add_parser("verify", help="independently verify a Kafka topic")
+    verify.add_argument("--bootstrap-servers", required=True)
+    verify.add_argument("--topic", required=True)
+    verify.add_argument("--expected-count", type=int)
+    verify.add_argument("--idle-timeout", type=float, default=20.0)
     return parser
 
 
@@ -30,6 +36,9 @@ def main(argv: list[str] | None = None) -> int:
         args = _parser().parse_args(argv)
     except SystemExit as error:
         return int(error.code)
+
+    if args.command == "verify":
+        return _run_verify(args)
 
     source = args.input.resolve()
     if not source.is_file():
@@ -78,6 +87,44 @@ def main(argv: list[str] | None = None) -> int:
         return 5
     if summary.remaining_after_flush:
         return 6
+    return 0
+
+
+def _run_verify(args: argparse.Namespace) -> int:
+    try:
+        settings = VerifierSettings(
+            bootstrap_servers=args.bootstrap_servers,
+            topic=args.topic,
+            expected_count=args.expected_count,
+            idle_timeout=args.idle_timeout,
+        )
+        summary = verify_topic(settings)
+    except ValueError as error:
+        print(f"error: invalid verifier settings: {error}", file=sys.stderr)
+        return 2
+    except (OSError, RuntimeError) as error:
+        print(f"error: verification failed: {error}", file=sys.stderr)
+        return 4
+
+    partitions = ",".join(
+        f"{partition}:{count}"
+        for partition, count in summary.partition_counts.items()
+    )
+    print(
+        "verification complete: "
+        f"total={summary.total}, "
+        f"valid={summary.valid}, "
+        f"invalid={summary.invalid}, "
+        f"duplicate_event_ids={summary.duplicate_event_ids}, "
+        f"partition_counts={partitions}"
+    )
+    if (
+        settings.expected_count is not None
+        and summary.total != settings.expected_count
+    ):
+        return 7
+    if summary.invalid or summary.duplicate_event_ids:
+        return 8
     return 0
 
 
