@@ -37,12 +37,37 @@ GDS text log
                                       |
                                       v
                     MySQL 8.4 serving and publication audit
+                                      |
+                                      v
+                    FastAPI read-only analytics API
+                                      |
+                                      v
+                    React + TypeScript + ECharts dashboard
 ```
+
+## Analytics API and dashboard
+
+The MySQL serving snapshot is exposed through a read-only FastAPI application
+and visualized by a React, TypeScript, and ECharts dashboard.
+
+The dashboard provides:
+
+- overview KPI cards, publication metadata, loading, refresh, and safe error states;
+- ranked airline metrics with selectable Top 5, Top 10, and Top 20 limits;
+- per-airline hourly response and token timelines;
+- a system-wide hourly dual-line timeline;
+- an airline-by-hour activity heatmap with selectable ranking limits;
+- API health and snapshot publication status;
+- responsive navigation across overview, airline, time, and pipeline pages.
+
+The frontend uses typed API contracts and a Vite development proxy. Chart
+components register only the required ECharts modules to reduce the production
+bundle size.
 
 The Kafka-to-HDFS layer is implemented and tested with isolated end-to-end and
 checkpoint-recovery tests. The final HDFS aggregate is published to MySQL as a
-validated, repeat-safe complete snapshot. A read-only API and ECharts dashboard
-remain the next phase.
+validated, repeat-safe complete snapshot. A read-only FastAPI service exposes
+the published snapshot to a responsive React and ECharts analytics dashboard.
 
 ## Why the offline baseline comes first
 
@@ -127,6 +152,40 @@ gds-kafka verify \
   --expected-count 100 \
   --idle-timeout 20
 ```
+
+### Synthetic live analytics demo
+
+The repository includes a configurable synthetic event generator for
+demonstrating the live pipeline without claiming access to real airline
+production systems. Generated records use the project's GDS text format and
+current UTC timestamps, while Kafka, Spark Structured Streaming, HDFS, MySQL,
+FastAPI, and the dashboard all run as real infrastructure components.
+
+Start Kafka, Spark/HDFS, and MySQL before running the demo. Then activate the
+Python environment and run bounded refresh cycles:
+
+```bash
+source .venv/bin/activate
+
+bash scripts/live-demo-refresh.sh \
+  --iterations 3 \
+  --interval 15 \
+  --events-per-cycle 30 \
+  --rate 5
+
+Each cycle:
+1. publishes synthetic GDS records to gds.simulated.v1;
+2. consumes new Kafka offsets with Spark's available-now trigger;
+3. merges and validates the cumulative HDFS metrics;
+4. exports and transactionally publishes a new MySQL snapshot;
+5. validates that the serving tables match the exported snapshot.
+The bounded available-now design avoids resource contention on the local
+single-worker Spark deployment. It demonstrates repeatable near-real-time
+micro-batch processing rather than direct collection from a production airline
+system.
+The dashboard Overview page requests the latest API snapshot automatically
+every 30 seconds. A visible change occurs only after a refresh cycle has
+successfully published a new MySQL snapshot.
 
 Run unit tests without touching Kafka:
 
@@ -265,8 +324,12 @@ volume, and post-restart validation matched all expected totals and the hash.
 - MySQL is a single local container without TLS, replication, automated backup,
   or high availability. Snapshot replacement is transactionally protected, but
   this does not claim a distributed exactly-once guarantee.
-- The read-only API and dashboard remain future phases and are not claimed as
-  implemented.
+- The API is read-only and intended for local analytics; authentication, TLS,
+  rate limiting, and production deployment hardening are not configured.
+- The frontend production bundle still exceeds Vite's default 500 kB warning
+  threshold; modular ECharts imports reduced its minified size from about
+  1.36 MB to about 799 kB, while route-level code splitting remains a possible
+  optimization.
 - The full Spark benchmark used one worker and one HDFS DataNode; it demonstrates
   pipeline correctness and recovery semantics, not horizontal scalability or
   infrastructure failover.
