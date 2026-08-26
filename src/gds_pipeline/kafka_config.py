@@ -1,6 +1,7 @@
 """Validated settings for Kafka ingestion."""
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -9,6 +10,9 @@ class ProducerSettings:
 
     bootstrap_servers: str
     topic: str
+    input_path: Path | None = None
+    checkpoint_path: Path | None = None
+    reset_checkpoint: bool = False
     limit: int | None = None
     rate: float | None = None
     flush_timeout: float = 30.0
