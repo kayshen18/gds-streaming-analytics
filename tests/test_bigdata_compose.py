@@ -72,3 +72,58 @@ def test_generated_state_is_ignored() -> None:
     assert ".ivy2/" in ignore
     assert "spark-events/" in ignore
     assert "infrastructure/spark-hdfs/runtime/" in ignore
+
+
+def test_compose_defines_pinned_spark_master_worker_and_submit_services() -> None:
+    compose = read(COMPOSE)
+    assert "spark-master:" in compose
+    assert "spark-worker:" in compose
+    assert "spark-submit:" in compose
+    assert compose.count(
+        "apache/spark:4.1.3-scala2.13-java17-python3-ubuntu"
+    ) >= 3
+    assert "spark://spark-master:7077" in compose
+    assert '"8080:8080"' in compose
+    assert "/dev/tcp/spark-master/7077" in compose
+    assert "/dev/tcp/localhost/7077" not in compose
+
+
+def test_spark_worker_has_explicit_resources_and_hdfs_configuration() -> None:
+    compose = read(COMPOSE)
+    assert "SPARK_WORKER_CORES: 2" in compose
+    assert "SPARK_WORKER_MEMORY: 4g" in compose
+    assert "HADOOP_CONF_DIR: /opt/hadoop-conf" in compose
+    assert compose.count("./hadoop:/opt/hadoop-conf:ro") >= 3
+    assert "service_healthy" in compose
+
+
+def test_spark_services_mount_application_and_dependency_cache() -> None:
+    compose = read(COMPOSE)
+    assert "spark-ivy-init-permissions:" in compose
+    assert 'user: "0:0"' in compose
+    assert "chown -R 185:185 /opt/spark/.ivy2" in compose
+    assert "../../:/opt/gds-app" in compose
+    assert "spark-ivy-cache:/opt/spark/.ivy2" in compose
+    assert "gds-spark-ivy-cache" in compose
+    kafka_compose = read(ROOT / "infrastructure" / "kafka" / "compose.yaml")
+    for content in (compose, kafka_compose):
+        assert "gds-streaming-network" in content
+        assert "external: true" in content
+
+
+def test_spark_defaults_and_submit_scripts_use_pinned_contract() -> None:
+    defaults = read(
+        ROOT / "infrastructure" / "spark-hdfs" / "spark" / "spark-defaults.conf"
+    )
+    submit = read(ROOT / "scripts" / "spark-submit.sh")
+    smoke = read(ROOT / "scripts" / "spark-smoke.sh")
+
+    assert "spark.master spark://spark-master:7077" in defaults
+    assert "spark-sql-kafka-0-10_2.13:4.1.3" in defaults
+    assert "set -euo pipefail" in submit
+    assert "spark-submit" in submit
+    assert "set -euo pipefail" in smoke
+    assert "tee" in smoke
+    assert "mktemp" in smoke
+    assert "spark_count=3" in smoke
+    assert "hdfs_count=3" in smoke

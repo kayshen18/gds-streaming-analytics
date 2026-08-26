@@ -4,6 +4,8 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="$project_root/infrastructure/kafka/compose.yaml"
 
+docker network inspect gds-streaming-network >/dev/null 2>&1 || \
+  docker network create gds-streaming-network >/dev/null
 docker compose -f "$compose_file" up -d
 
 for attempt in $(seq 1 36); do

@@ -10,6 +10,8 @@ services:
     volumes:
       - kafka-data:/tmp/kraft-combined-logs
     restart: "no"
+    networks:
+      - gds-streaming-network
 
   kafka:
     image: apache/kafka:4.3.1
@@ -59,7 +61,14 @@ services:
       retries: 24
       start_period: 20s
     restart: unless-stopped
+    networks:
+      - gds-streaming-network
 
 volumes:
   kafka-data:
     name: gds-kafka-data
+
+networks:
+  gds-streaming-network:
+    name: gds-streaming-network
+    external: true
