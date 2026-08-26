@@ -143,6 +143,8 @@ def test_spark_defaults_and_submit_scripts_use_pinned_contract() -> None:
     assert "set -euo pipefail" in submit
     assert "spark-submit" in submit
     assert "PYTHONPATH=/opt/gds-app/src" in submit
+    assert "HOME=/opt/spark" in submit
+    assert "spark.jars.ivy=/opt/spark/.ivy2" in submit
     assert "set -euo pipefail" in smoke
     assert "tee" in smoke
     assert "mktemp" in smoke
