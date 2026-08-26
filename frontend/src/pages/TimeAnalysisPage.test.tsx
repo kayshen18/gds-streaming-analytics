@@ -26,6 +26,13 @@ vi.mock('../charts/AirlineTimelineChart', () => ({
   ),
 }))
 
+vi.mock('./HourlyHeatmapSection', () => ({
+  default: () => (
+    <section aria-label="Hourly heatmap section">
+      Heatmap section
+    </section>
+  ),
+}))
 
 const getTimelineMock = vi.mocked(getTimeline)
 
@@ -66,6 +73,12 @@ describe('TimeAnalysisPage', () => {
         name: 'System-wide hourly timeline',
       }),
     ).toHaveTextContent('2 hourly points')
+
+    expect(
+      screen.getByRole('region', {
+        name: 'Hourly heatmap section',
+      }),
+    ).toBeInTheDocument()
 
     expect(getTimelineMock).toHaveBeenCalledTimes(1)
   })

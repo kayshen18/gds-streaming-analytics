@@ -3,6 +3,7 @@ import type {
   AirlineTimelineResponse,
   OverviewResponse,
   TimelineResponse,
+  HourlyHeatmapResponse,
 } from './types'
 
 export async function getOverview(): Promise<OverviewResponse> {
@@ -81,4 +82,25 @@ export async function getTimeline(): Promise<TimelineResponse> {
   }
 
   return (await response.json()) as TimelineResponse
+}
+
+export async function getHourlyHeatmap(
+  limit: number,
+): Promise<HourlyHeatmapResponse> {
+  const response = await fetch(
+    `/api/v1/hourly-heatmap?limit=${limit}`,
+    {
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Hourly heatmap request failed with status ${response.status}`,
+    )
+  }
+
+  return (await response.json()) as HourlyHeatmapResponse
 }

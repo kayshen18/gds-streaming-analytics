@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { getTimeline } from '../api/client'
 import type { TimelineResponse } from '../api/types'
 import AirlineTimelineChart from '../charts/AirlineTimelineChart'
-
+import HourlyHeatmapSection from './HourlyHeatmapSection'
 
 function TimeAnalysisPage() {
   const [timeline, setTimeline] =
@@ -49,6 +49,8 @@ function TimeAnalysisPage() {
           points={timeline.items}
         />
       )}
+
+      <HourlyHeatmapSection />
     </>
   )
 }

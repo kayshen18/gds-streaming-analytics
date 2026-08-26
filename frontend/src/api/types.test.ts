@@ -7,6 +7,8 @@ import type {
   OverviewResponse,
   TimelinePoint,
   TimelineResponse,
+  HeatmapCell,
+  HourlyHeatmapResponse,
 } from './types'
 
 
@@ -90,4 +92,32 @@ it('accepts the global timeline response', () => {
   expect(response.items).toHaveLength(2)
   expect(response.items[0].stat_hour).toBe(0)
   expect(response.items[1].stat_hour).toBe(23)
+})
+
+test('HourlyHeatmapResponse describes heatmap axes and cells', () => {
+  const cell: HeatmapCell = {
+    airline_code: 'CZ',
+    stat_hour: 0,
+    successful_response_records: 1200,
+    success_token_count: 2400,
+  }
+
+  const response: HourlyHeatmapResponse = {
+    airlines: ['CZ', 'MU'],
+    hours: [0, 1],
+    cells: [cell],
+  }
+
+  expectTypeOf(cell.airline_code).toEqualTypeOf<string>()
+  expectTypeOf(cell.stat_hour).toEqualTypeOf<number>()
+  expectTypeOf(
+    cell.successful_response_records,
+  ).toEqualTypeOf<number>()
+  expectTypeOf(
+    cell.success_token_count,
+  ).toEqualTypeOf<number>()
+
+  expectTypeOf(response.airlines).toEqualTypeOf<string[]>()
+  expectTypeOf(response.hours).toEqualTypeOf<number[]>()
+  expectTypeOf(response.cells).toEqualTypeOf<HeatmapCell[]>()
 })

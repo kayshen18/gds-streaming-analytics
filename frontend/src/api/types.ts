@@ -35,3 +35,16 @@ export interface AirlineTimelineResponse {
   airline_code: string
   items: TimelinePoint[]
 }
+
+export interface HeatmapCell {
+  airline_code: string
+  stat_hour: number
+  successful_response_records: number
+  success_token_count: number
+}
+
+export interface HourlyHeatmapResponse {
+  airlines: string[]
+  hours: number[]
+  cells: HeatmapCell[]
+}

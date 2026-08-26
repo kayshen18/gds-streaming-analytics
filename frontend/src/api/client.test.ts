@@ -5,6 +5,7 @@ import {
   getAirlineTimeline,
   getOverview,
   getTimeline,
+  getHourlyHeatmap,
 } from './client'
 
 const overviewPayload = {
@@ -221,6 +222,62 @@ describe('getTimeline', () => {
 
     await expect(getTimeline()).rejects.toThrow(
       'Timeline request failed with status 503',
+    )
+  })
+})
+
+describe('getHourlyHeatmap', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('requests the hourly heatmap with the selected limit', async () => {
+    const heatmapPayload = {
+      airlines: ['CZ', 'MU'],
+      hours: [0, 1],
+      cells: [
+        {
+          airline_code: 'CZ',
+          stat_hour: 0,
+          successful_response_records: 1200,
+          success_token_count: 2400,
+        },
+      ],
+    }
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(heatmapPayload),
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getHourlyHeatmap(10),
+    ).resolves.toEqual(heatmapPayload)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/hourly-heatmap?limit=10',
+      {
+        headers: {
+          Accept: 'application/json',
+        },
+      },
+    )
+  })
+
+  it('rejects when the heatmap request fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getHourlyHeatmap(0),
+    ).rejects.toThrow(
+      'Hourly heatmap request failed with status 422',
     )
   })
 })
