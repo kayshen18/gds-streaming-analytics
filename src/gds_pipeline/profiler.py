@@ -1,10 +1,16 @@
 """Streaming profiling and aggregation for GDS log files."""
 
 from collections import Counter, defaultdict
+import csv
 from dataclasses import dataclass, field
 import hashlib
+import json
+import os
 from pathlib import Path
+import shutil
+import tempfile
 from time import perf_counter
+from uuid import uuid4
 
 from .models import ParsedRecord, ParseStatus
 from .parser import parse_line
@@ -149,3 +155,145 @@ def _observe_dimensions(result: ProfileResult, record: ParsedRecord) -> None:
             result.latest_date = record.event_date
     if record.event_hour is not None:
         result.observed_hours.add(record.event_hour)
+
+
+def write_artifacts(
+    result: ProfileResult,
+    output_dir: Path,
+    overwrite: bool = False,
+) -> tuple[Path, Path, Path, Path]:
+    """Write a complete artifact directory, replacing it only on success."""
+
+    output_dir = output_dir.resolve()
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    if output_dir.exists() and not overwrite:
+        raise FileExistsError(f"output directory already exists: {output_dir}")
+
+    temporary = Path(
+        tempfile.mkdtemp(
+            prefix=f".{output_dir.name}.tmp-",
+            dir=output_dir.parent,
+        )
+    )
+    backup: Path | None = None
+    try:
+        _write_profile(result, temporary / "profile.json")
+        _write_metrics(result, temporary / "hourly_airline_metrics.csv")
+        _write_invalid(result, temporary / "invalid_records.csv")
+        _write_duplicates(result, temporary / "duplicate_summary.json")
+
+        if output_dir.exists():
+            backup = output_dir.with_name(
+                f".{output_dir.name}.backup-{uuid4().hex}"
+            )
+            os.replace(output_dir, backup)
+        os.replace(temporary, output_dir)
+        if backup is not None:
+            shutil.rmtree(backup)
+    except Exception:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+        if backup is not None and backup.exists() and not output_dir.exists():
+            os.replace(backup, output_dir)
+        raise
+
+    names = (
+        "profile.json",
+        "hourly_airline_metrics.csv",
+        "invalid_records.csv",
+        "duplicate_summary.json",
+    )
+    return tuple(output_dir / name for name in names)  # type: ignore[return-value]
+
+
+def _write_profile(result: ProfileResult, path: Path) -> None:
+    payload = {
+        "source_name": result.source_name,
+        "byte_size": result.byte_size,
+        "sha256": result.sha256,
+        "physical_line_count": result.physical_line_count,
+        "blank_line_count": result.blank_line_count,
+        "valid_count": result.valid_count,
+        "invalid_count": result.invalid_count,
+        "unsupported_count": result.unsupported_count,
+        "log_type_counts": dict(sorted(result.log_type_counts.items())),
+        "failure_reason_counts": dict(
+            sorted(result.failure_reason_counts.items())
+        ),
+        "earliest_date": result.earliest_date,
+        "latest_date": result.latest_date,
+        "observed_hours": sorted(result.observed_hours),
+        "airline_codes": sorted(result.airline_codes),
+        "total_success_tokens": result.total_success_tokens,
+        "successful_response_records": result.successful_response_records,
+        "duplicate_record_count": result.duplicate_record_count,
+        "duplicate_group_count": result.duplicate_group_count,
+        "elapsed_seconds": result.elapsed_seconds,
+        "records_per_second": result.records_per_second,
+    }
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_metrics(result: ProfileResult, path: Path) -> None:
+    fieldnames = [
+        "stat_date",
+        "stat_hour",
+        "airline_code",
+        "successful_response_records",
+        "successful_booking_tokens",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as target:
+        writer = csv.DictWriter(target, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        for (date, hour, airline), metric in sorted(result.metrics.items()):
+            writer.writerow(
+                {
+                    "stat_date": date,
+                    "stat_hour": hour,
+                    "airline_code": airline,
+                    "successful_response_records": metric.response_records,
+                    "successful_booking_tokens": metric.booking_tokens,
+                }
+            )
+
+
+def _write_invalid(result: ProfileResult, path: Path) -> None:
+    with path.open("w", encoding="utf-8", newline="") as target:
+        writer = csv.DictWriter(
+            target,
+            fieldnames=["line_number", "failure_reason", "raw_line"],
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for record in result.invalid_records:
+            writer.writerow(
+                {
+                    "line_number": record.line_number,
+                    "failure_reason": record.failure_reason,
+                    "raw_line": record.raw_line,
+                }
+            )
+
+
+def _write_duplicates(result: ProfileResult, path: Path) -> None:
+    repeated = sorted(
+        result.duplicate_fingerprints.items(),
+        key=lambda item: (-item[1], item[0]),
+    )
+    payload = {
+        "duplicate_group_count": result.duplicate_group_count,
+        "duplicate_record_count": result.duplicate_record_count,
+        "fingerprints": [
+            {"sha256": fingerprint, "occurrences": count}
+            for fingerprint, count in repeated
+        ],
+    }
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
