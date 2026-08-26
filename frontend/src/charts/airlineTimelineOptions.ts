@@ -13,12 +13,13 @@ export function buildAirlineTimelineOptions(
         'Successful responses',
         'Successful tokens',
       ],
+      bottom: 4,
     },
     grid: {
       left: 64,
       right: 64,
       top: 72,
-      bottom: 48,
+      bottom: 88,
     },
     xAxis: {
       type: 'category',

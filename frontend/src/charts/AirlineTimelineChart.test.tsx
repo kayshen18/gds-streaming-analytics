@@ -12,7 +12,7 @@ const chartMocks = vi.hoisted(() => ({
 }))
 
 
-vi.mock('echarts', () => ({
+vi.mock('./echarts', () => ({
   init: chartMocks.init,
 }))
 

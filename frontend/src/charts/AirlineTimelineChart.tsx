@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import * as echarts from 'echarts'
+import { init } from './echarts'
 
 import type { TimelinePoint } from '../api/types'
 import {
@@ -26,7 +26,7 @@ function AirlineTimelineChart({
       return
     }
 
-    const chart = echarts.init(chartElement)
+    const chart = init(chartElement)
 
     chart.setOption(
       buildAirlineTimelineOptions(points),

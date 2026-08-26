@@ -36,7 +36,7 @@ export function buildHourlyHeatmapOptions(
       left: 72,
       right: 32,
       top: 32,
-      bottom: 88,
+      bottom: 150,
     },
     xAxis: {
       type: 'category',
@@ -64,7 +64,7 @@ export function buildHourlyHeatmapOptions(
       calculable: true,
       orient: 'horizontal',
       left: 'center',
-      bottom: 12,
+      bottom: 0,
     },
     series: [
       {
