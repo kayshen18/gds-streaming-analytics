@@ -14,11 +14,16 @@ from gds_pipeline.api.errors import (
 from gds_pipeline.api.models import (
     HealthResponse,
     OverviewResponse,
+    TimelineResponse,
 )
 from gds_pipeline.api.overview_repository import (
     OverviewNotAvailableError,
     OverviewReader,
     OverviewRepository,
+)
+from gds_pipeline.api.timeline_repository import (
+    TimelineReader,
+    TimelineRepository,
 )
 
 
@@ -30,6 +35,7 @@ class AlwaysReadyDatabase:
 def create_app(
     database: ReadinessProbe | None = None,
     overview_repository: OverviewReader | None = None,
+    timeline_repository: TimelineReader | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="GDS Streaming Analytics API",
@@ -43,6 +49,9 @@ def create_app(
 
     if overview_repository is None:
         overview_repository = OverviewRepository(database)
+
+    if timeline_repository is None:
+        timeline_repository = TimelineRepository(database)
 
     @app.get(
         "/api/v1/health",
@@ -82,6 +91,13 @@ def create_app(
                 code="OVERVIEW_NOT_AVAILABLE",
                 message="Overview data is not available",
             ) from error
+
+    @app.get(
+        "/api/v1/timeline",
+        response_model=TimelineResponse,
+    )
+    def timeline() -> TimelineResponse:
+        return timeline_repository.fetch_timeline()
 
     return app
 

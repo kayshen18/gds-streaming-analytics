@@ -5,6 +5,8 @@ from gds_pipeline.api.models import (
     ErrorResponse,
     HealthResponse,
     OverviewResponse,
+    TimelinePoint,
+    TimelineResponse,
 )
 
 from gds_pipeline.api.models import HealthResponse
@@ -73,4 +75,40 @@ def test_overview_response_rejects_negative_counts() -> None:
             start_date="2016-06-01",
             end_date="2016-06-30",
             publication_id="126fa842-3721-4233-991f-8fd3b9e22929",
+        )
+
+def test_timeline_response_accepts_hourly_points() -> None:
+    response = TimelineResponse(
+        items=[
+            TimelinePoint(
+                stat_date="2018-08-30",
+                stat_hour=0,
+                successful_response_records=120,
+                success_token_count=205,
+            ),
+            TimelinePoint(
+                stat_date="2018-08-30",
+                stat_hour=1,
+                successful_response_records=135,
+                success_token_count=220,
+            ),
+        ]
+    )
+
+    assert len(response.items) == 2
+    assert response.items[0].stat_hour == 0
+    assert response.items[1].stat_hour == 1
+    assert response.items[0].stat_date.isoformat() == "2018-08-30"
+
+
+@pytest.mark.parametrize("invalid_hour", [-1, 24])
+def test_timeline_point_rejects_invalid_hours(
+    invalid_hour: int,
+) -> None:
+    with pytest.raises(ValidationError):
+        TimelinePoint(
+            stat_date="2018-08-30",
+            stat_hour=invalid_hour,
+            successful_response_records=120,
+            success_token_count=205,
         )

@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
+HourOfDay = Annotated[int, Field(ge=0, le=23)]
 
 
 class ErrorDetail(BaseModel):
@@ -28,3 +29,13 @@ class OverviewResponse(BaseModel):
     start_date: date
     end_date: date
     publication_id: str
+
+class TimelinePoint(BaseModel):
+    stat_date: date
+    stat_hour: HourOfDay
+    successful_response_records: NonNegativeInt
+    success_token_count: NonNegativeInt
+
+
+class TimelineResponse(BaseModel):
+    items: list[TimelinePoint]
