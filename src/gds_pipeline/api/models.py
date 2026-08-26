@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 NonNegativeInt = Annotated[int, Field(ge=0)]
 HourOfDay = Annotated[int, Field(ge=0, le=23)]
 AirlineCode = Annotated[str, Field(min_length=1, max_length=8)]
+Sha256Hex = Annotated[
+    str,
+    Field(pattern=r"^[0-9a-f]{64}$"),
+]
 
 
 class ErrorDetail(BaseModel):
@@ -66,3 +70,14 @@ class HourlyHeatmapResponse(BaseModel):
     airlines: list[AirlineCode]
     hours: list[HourOfDay]
     cells: list[HeatmapCell]
+
+class PublicationResponse(BaseModel):
+    publication_id: str
+    source_hdfs_root: str
+    output_version: str
+    source_row_count: NonNegativeInt
+    successful_response_records: NonNegativeInt
+    success_token_count: NonNegativeInt
+    metrics_sha256: Sha256Hex
+    status: Literal["published"]
+    completed_at: datetime

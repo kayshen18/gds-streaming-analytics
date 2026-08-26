@@ -18,6 +18,7 @@ from gds_pipeline.api.models import (
     HourlyHeatmapResponse,
     OverviewResponse,
     TimelineResponse,
+    PublicationResponse,
 )
 from gds_pipeline.api.overview_repository import (
     OverviewNotAvailableError,
@@ -43,6 +44,12 @@ from gds_pipeline.api.heatmap_repository import (
     HeatmapRepository,
 )
 
+from gds_pipeline.api.publication_repository import (
+    PublicationNotAvailableError,
+    PublicationReader,
+    PublicationRepository,
+)
+
 class AlwaysReadyDatabase:
     def is_ready(self) -> bool:
         return True
@@ -57,6 +64,7 @@ def create_app(
         AirlineTimelineReader | None
     ) = None,
     heatmap_repository: HeatmapReader | None = None,
+    publication_repository: PublicationReader | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="GDS Streaming Analytics API",
@@ -84,6 +92,9 @@ def create_app(
 
     if heatmap_repository is None:
         heatmap_repository = HeatmapRepository(database)
+
+    if publication_repository is None:
+        publication_repository = PublicationRepository(database)
 
     @app.get(
         "/api/v1/health",
@@ -172,6 +183,21 @@ def create_app(
         limit: int = Query(default=10, ge=1, le=20),
     ) -> HourlyHeatmapResponse:
         return heatmap_repository.fetch_heatmap(limit=limit)
+
+
+    @app.get(
+        "/api/v1/publication",
+        response_model=PublicationResponse,
+    )
+    def publication() -> PublicationResponse:
+        try:
+            return publication_repository.fetch_publication()
+        except PublicationNotAvailableError as error:
+            raise ApiError(
+                status_code=404,
+                code="PUBLICATION_NOT_AVAILABLE",
+                message="Publication data is not available",
+            ) from error
 
     return app
 

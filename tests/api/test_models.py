@@ -12,6 +12,7 @@ from gds_pipeline.api.models import (
     OverviewResponse,
     TimelinePoint,
     TimelineResponse,
+    PublicationResponse,
 )
 
 from gds_pipeline.api.models import HealthResponse
@@ -210,3 +211,45 @@ def test_hourly_heatmap_response_accepts_axes_and_cells() -> None:
     assert len(response.cells) == 4
     assert response.cells[0].airline_code == "CZ"
     assert response.cells[0].stat_hour == 0
+
+def test_publication_response_accepts_snapshot_metadata() -> None:
+    response = PublicationResponse(
+        publication_id=(
+            "126fa842-3721-4233-991f-8fd3b9e22929"
+        ),
+        source_hdfs_root=(
+            "hdfs://hdfs-namenode:8020/data/gds/metrics"
+        ),
+        output_version="v1",
+        source_row_count=3203,
+        successful_response_records=1310068,
+        success_token_count=2145511,
+        metrics_sha256=(
+            "9b0f4a3afc33e73461414ff2d60a2653"
+            "e32a5fdbcfe8a810b8b2b42525fcc0be"
+        ),
+        status="published",
+        completed_at="2026-08-13T14:15:19.385388",
+    )
+
+    assert response.source_row_count == 3203
+    assert response.status == "published"
+    assert response.completed_at.year == 2026
+    assert len(response.metrics_sha256) == 64
+
+
+def test_publication_response_rejects_invalid_sha256() -> None:
+    with pytest.raises(ValidationError):
+        PublicationResponse(
+            publication_id=(
+                "126fa842-3721-4233-991f-8fd3b9e22929"
+            ),
+            source_hdfs_root="hdfs://example/metrics",
+            output_version="v1",
+            source_row_count=3203,
+            successful_response_records=1310068,
+            success_token_count=2145511,
+            metrics_sha256="not-a-sha256",
+            status="published",
+            completed_at="2026-08-13T14:15:19.385388",
+        )
