@@ -13,3 +13,4 @@ benchmarks/local/
 .ivy2/
 spark-events/
 infrastructure/spark-hdfs/runtime/
+infrastructure/mysql/.env

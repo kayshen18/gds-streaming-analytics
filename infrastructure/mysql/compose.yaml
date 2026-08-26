@@ -1,0 +1,42 @@
+name: gds-mysql
+
+services:
+  mysql:
+    image: ${MYSQL_IMAGE}
+    container_name: gds-mysql
+    hostname: mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in infrastructure/mysql/.env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-gds_analytics}
+      MYSQL_USER: ${MYSQL_USER:-gds_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in infrastructure/mysql/.env}
+      TZ: UTC
+    ports:
+      - "${GDS_MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - gds-mysql-data:/var/lib/mysql
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent && mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 30s
+    mem_limit: 1g
+    cpus: 1.0
+    restart: unless-stopped
+    networks:
+      - gds-streaming-network
+
+volumes:
+  gds-mysql-data:
+    name: gds-mysql-data
+
+networks:
+  gds-streaming-network:
+    name: gds-streaming-network
+    external: true
