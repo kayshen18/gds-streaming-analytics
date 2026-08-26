@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getOverview } from '../api/client'
@@ -52,6 +53,21 @@ describe('OverviewPage', () => {
     expect(
       screen.getByText('Successful tokens'),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText('Data range'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('2018-08-30 to 2018-08-30'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByText('Publication ID'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        '126fa842-3721-4233-991f-8fd3b9e22929',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('shows a safe message when loading fails', async () => {
@@ -68,5 +84,36 @@ describe('OverviewPage', () => {
     expect(
       screen.queryByText('database password was rejected'),
     ).not.toBeInTheDocument()
+  })
+
+  it('reloads the overview when refresh is clicked', async () => {
+    const refreshedPayload = {
+      ...overviewPayload,
+      metric_rows: 4000,
+    }
+
+    getOverviewMock
+      .mockResolvedValueOnce(overviewPayload)
+      .mockResolvedValueOnce(refreshedPayload)
+
+    const user = userEvent.setup()
+
+    render(<OverviewPage />)
+
+    expect(
+      await screen.findByText('3,203'),
+    ).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Refresh overview',
+      }),
+    )
+
+    expect(
+      await screen.findByText('4,000'),
+    ).toBeInTheDocument()
+
+    expect(getOverviewMock).toHaveBeenCalledTimes(2)
   })
 })
