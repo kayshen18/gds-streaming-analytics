@@ -22,15 +22,20 @@ GDS text log
                     v
           Kafka 4.3.1 / KRaft / gds.raw.v1 / 3 partitions
                     |
-                    `-- independent verifier
-                          |-- earliest offsets, fresh consumer group
-                          |-- schema, event_id, and Kafka-key validation
-                          `-- invalid, duplicate, and partition accounting
+                    v
+          Spark 4.1.3 Structured Streaming
+                    |-- versioned envelope and GDS validation
+                    |-- raw, clean, dead-letter and quality Parquet
+                    |-- checkpointed offset recovery
+                    `-- hourly airline record/token metrics
+                                      |
+                                      v
+                    HDFS 3.5.0 persistent named volumes
 ```
 
-The next layer will consume `gds.raw.v1` with Spark Structured Streaming,
-archive clean records as HDFS Parquet, route malformed records to a dead-letter
-path, and write idempotent hourly aggregates to PostgreSQL.
+The Kafka-to-HDFS layer is implemented and tested with isolated end-to-end and
+checkpoint-recovery tests. The next layer will publish aggregate results to
+PostgreSQL, expose an API, and render an ECharts dashboard.
 
 ## Why the offline baseline comes first
 
@@ -82,6 +87,8 @@ bash scripts/kafka-create-topic.sh
 
 See [`docs/kafka-runbook.md`](docs/kafka-runbook.md) for safe stop/reset,
 checkpoint recovery, offset inspection, integration tests, and diagnostics.
+See [`docs/spark-hdfs-runbook.md`](docs/spark-hdfs-runbook.md) for Spark/HDFS
+startup, end-to-end tests, full-data processing, validation, and recovery.
 
 ## Commands
 
@@ -185,6 +192,38 @@ more conservative GNU wall-clock measurement covering process startup and exit.
 Kafka remained healthy after both runs, no swap was used, and recent broker logs
 contained no matches for `error`, `exception`, `fatal`, or `outofmemory`.
 
+## Verified full Spark/HDFS benchmark
+
+Measured locally on 2026-08-13 with Spark 4.1.3, Hadoop 3.5.0, one Spark
+worker with two cores and 2 GiB executor memory, and the complete
+`gds.raw.v1` topic.
+
+| Measurement | Result |
+|---|---:|
+| Kafka input records | 2,563,566 |
+| Business-valid records | 2,560,708 |
+| Dead-letter records | 2,858 |
+| Final hour-airline groups | 3,203 |
+| Successful response records | 1,310,068 |
+| Success tokens | 2,145,511 |
+| Available-now wall time | 21 min 17.86 s |
+| End-to-end throughput | ~2,006 records/s |
+| HDFS space after run | 526.39 MiB |
+| Missing/corrupt HDFS blocks | 0 / 0 |
+
+Spark's canonical sorted aggregate CSV had SHA-256
+`9b0f4a3afc33e73461414ff2d60a2653e32a5fdbcfe8a810b8b2b42525fcc0be`,
+identical to two independent offline baseline runs. The full run exited zero,
+published one batch commit marker and a matching Structured Streaming
+checkpoint commit, and its log scan found no error, exception, fatal,
+out-of-memory, or killed entries.
+
+The processing-time path was also exercised with two waves against one
+checkpoint: 40 records were committed, the query stopped gracefully, then the
+same query restarted and consumed only 60 new records. Final reconciliation
+found exactly 100 unique Kafka `(partition, offset)` locations; the automated
+demonstration completed in 4 minutes 47.67 seconds.
+
 ## Limitations
 
 - The local broker is a single combined controller/broker with replication
@@ -193,5 +232,8 @@ contained no matches for `error`, `exception`, `fatal`, or `outofmemory`.
 - The in-memory duplicate detector stores every event ID; the measured full run
   used about 571 MiB maximum RSS. Larger datasets should use a bounded or
   external deduplication strategy.
-- Spark, HDFS Parquet, dead-letter handling, PostgreSQL aggregates, API, and
-  dashboard remain future phases and are not claimed as implemented.
+- PostgreSQL publication, the API, and dashboard remain future phases and are
+  not claimed as implemented.
+- The full Spark benchmark used one worker and one HDFS DataNode; it demonstrates
+  pipeline correctness and recovery semantics, not horizontal scalability or
+  infrastructure failover.

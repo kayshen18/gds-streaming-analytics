@@ -57,3 +57,28 @@ def test_checkpoint_resume_processes_only_new_kafka_offsets() -> None:
             "success_token_count": 10,
         },
     }
+
+
+@pytest.mark.skipif(
+    os.getenv("RUN_SPARK_PIPELINE_INTEGRATION") != "1",
+    reason="set RUN_SPARK_PIPELINE_INTEGRATION=1 to use Kafka, Spark, and HDFS",
+)
+def test_processing_time_restart_processes_two_waves_once() -> None:
+    from tests.integration.spark_pipeline_harness import run_continuous_case
+
+    result = run_continuous_case(ROOT)
+
+    assert result["first_wave_input_count"] == 40
+    assert result["final_input_count"] == 100
+    assert result["unique_kafka_locations"] == 100
+    assert result["raw_plus_envelope_dead_count"] == 100
+    assert result["airline_metrics"] == {
+        "CA": {
+            "successful_response_records": 60,
+            "success_token_count": 70,
+        },
+        "MU": {
+            "successful_response_records": 10,
+            "success_token_count": 10,
+        },
+    }

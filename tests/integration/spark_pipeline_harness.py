@@ -64,6 +64,44 @@ def run_recovery_case(root: Path) -> dict[str, object]:
         _cleanup_hdfs(root, hdfs_root, checkpoint_root)
 
 
+def run_continuous_case(root: Path) -> dict[str, object]:
+    run_id = uuid4().hex
+    topic = f"gds.continuous.{run_id}"
+    hdfs_root = f"hdfs://hdfs-namenode:8020/data/gds-continuous/{run_id}"
+    checkpoint_root = (
+        f"hdfs://hdfs-namenode:8020/checkpoints/gds-continuous/{run_id}"
+    )
+    admin = AdminClient({"bootstrap.servers": "localhost:9092"})
+    _create_topic(admin, topic)
+    try:
+        records = _case_records()
+        _produce_records(topic, records[:40])
+        _run_continuous_wave(
+            root, topic, hdfs_root, checkpoint_root, expected_rows=40
+        )
+        _merge_pipeline(root, hdfs_root, checkpoint_root)
+        first = _inspect_pipeline(root, hdfs_root, checkpoint_root)
+
+        _produce_records(topic, records[40:])
+        _run_continuous_wave(
+            root, topic, hdfs_root, checkpoint_root, expected_rows=60
+        )
+        _merge_pipeline(root, hdfs_root, checkpoint_root)
+        final = _inspect_pipeline(root, hdfs_root, checkpoint_root)
+        return {
+            "first_wave_input_count": first["input_count"],
+            "final_input_count": final["input_count"],
+            "unique_kafka_locations": final["unique_kafka_locations"],
+            "raw_plus_envelope_dead_count": final[
+                "raw_plus_envelope_dead_count"
+            ],
+            "airline_metrics": final["airline_metrics"],
+        }
+    finally:
+        _delete_topic(admin, topic)
+        _cleanup_hdfs(root, hdfs_root, checkpoint_root)
+
+
 def _create_topic(admin: AdminClient, topic: str) -> None:
     future = admin.create_topics([NewTopic(topic, 3, 1)])[topic]
     future.result(timeout=20)
@@ -157,6 +195,43 @@ def _run_pipeline(
             "--trigger", "available-now", "--merge-after",
         ],
         timeout=360,
+    )
+
+
+def _run_continuous_wave(
+    root: Path,
+    topic: str,
+    hdfs_root: str,
+    checkpoint_root: str,
+    *,
+    expected_rows: int,
+) -> None:
+    _run_checked(
+        root,
+        [
+            "docker", "exec", "-e", "PYTHONPATH=/opt/gds-app/src",
+            "gds-spark-submit", "/opt/spark/bin/spark-submit",
+            "--master", "spark://spark-master:7077",
+            "/opt/gds-app/tests/integration/spark_continuous_runner.py",
+            topic, hdfs_root, checkpoint_root, str(expected_rows),
+        ],
+        timeout=240,
+    )
+
+
+def _merge_pipeline(root: Path, hdfs_root: str, checkpoint_root: str) -> None:
+    _run_checked(
+        root,
+        [
+            "docker", "exec", "-e", "PYTHONPATH=/opt/gds-app/src",
+            "gds-spark-submit", "/opt/spark/bin/spark-submit",
+            "--master", "spark://spark-master:7077",
+            "/opt/gds-app/src/gds_pipeline/spark_cli.py", "merge",
+            "--hdfs-root", hdfs_root,
+            "--checkpoint-root", checkpoint_root,
+            "--output-version", "v1",
+        ],
+        timeout=240,
     )
 
 
