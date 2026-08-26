@@ -1,6 +1,13 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 
 import { getOverview } from '../api/client'
 import OverviewPage from './OverviewPage'
@@ -27,6 +34,10 @@ const overviewPayload = {
 describe('OverviewPage', () => {
   beforeEach(() => {
     getOverviewMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('loads and displays the overview metrics', async () => {
@@ -112,6 +123,43 @@ describe('OverviewPage', () => {
 
     expect(
       await screen.findByText('4,000'),
+    ).toBeInTheDocument()
+
+    expect(getOverviewMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes the overview automatically every 30 seconds', async () => {
+    vi.useFakeTimers()
+
+    const refreshedPayload = {
+      ...overviewPayload,
+      metric_rows: 12,
+      successful_response_records: 100,
+      success_token_count: 100,
+      publication_id: 'bf65b507-0884-494b-8e2d-f8c89c81040a',
+    }
+
+    getOverviewMock
+      .mockResolvedValueOnce(overviewPayload)
+      .mockResolvedValueOnce(refreshedPayload)
+
+    render(<OverviewPage />)
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('3,203')).toBeInTheDocument()
+    expect(getOverviewMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+
+    expect(screen.getByText('12')).toBeInTheDocument()
+    expect(screen.getAllByText('100')).toHaveLength(2)
+    expect(
+      screen.getByText('bf65b507-0884-494b-8e2d-f8c89c81040a'),
     ).toBeInTheDocument()
 
     expect(getOverviewMock).toHaveBeenCalledTimes(2)

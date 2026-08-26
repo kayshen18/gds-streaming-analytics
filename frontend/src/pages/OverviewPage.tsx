@@ -34,6 +34,18 @@ function OverviewPage() {
     }
   }, [requestVersion])
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRequestVersion(
+        (currentVersion) => currentVersion + 1,
+      )
+    }, 30_000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [])
+
   function handleRefresh() {
     setOverview(null)
     setError(null)
