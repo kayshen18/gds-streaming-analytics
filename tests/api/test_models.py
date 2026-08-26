@@ -7,6 +7,8 @@ from gds_pipeline.api.models import (
     ErrorDetail,
     ErrorResponse,
     HealthResponse,
+    HeatmapCell,
+    HourlyHeatmapResponse,
     OverviewResponse,
     TimelinePoint,
     TimelineResponse,
@@ -169,3 +171,42 @@ def test_airline_timeline_response_identifies_airline() -> None:
     assert response.airline_code == "CA"
     assert len(response.items) == 2
     assert response.items[0].stat_hour == 0
+
+
+def test_hourly_heatmap_response_accepts_axes_and_cells() -> None:
+    response = HourlyHeatmapResponse(
+        airlines=["CZ", "MU"],
+        hours=[0, 1],
+        cells=[
+            HeatmapCell(
+                airline_code="CZ",
+                stat_hour=0,
+                successful_response_records=500,
+                success_token_count=820,
+            ),
+            HeatmapCell(
+                airline_code="CZ",
+                stat_hour=1,
+                successful_response_records=420,
+                success_token_count=700,
+            ),
+            HeatmapCell(
+                airline_code="MU",
+                stat_hour=0,
+                successful_response_records=390,
+                success_token_count=650,
+            ),
+            HeatmapCell(
+                airline_code="MU",
+                stat_hour=1,
+                successful_response_records=360,
+                success_token_count=610,
+            ),
+        ],
+    )
+
+    assert response.airlines == ["CZ", "MU"]
+    assert response.hours == [0, 1]
+    assert len(response.cells) == 4
+    assert response.cells[0].airline_code == "CZ"
+    assert response.cells[0].stat_hour == 0

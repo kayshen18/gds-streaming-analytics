@@ -15,6 +15,7 @@ from gds_pipeline.api.models import (
     AirlinesResponse,
     AirlineTimelineResponse,
     HealthResponse,
+    HourlyHeatmapResponse,
     OverviewResponse,
     TimelineResponse,
 )
@@ -37,6 +38,10 @@ from gds_pipeline.api.airline_timeline_repository import (
     AirlineTimelineRepository,
 )
 
+from gds_pipeline.api.heatmap_repository import (
+    HeatmapReader,
+    HeatmapRepository,
+)
 
 class AlwaysReadyDatabase:
     def is_ready(self) -> bool:
@@ -51,6 +56,7 @@ def create_app(
     airline_timeline_repository: (
         AirlineTimelineReader | None
     ) = None,
+    heatmap_repository: HeatmapReader | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="GDS Streaming Analytics API",
@@ -75,6 +81,9 @@ def create_app(
         airline_timeline_repository = (
             AirlineTimelineRepository(database)
         )
+
+    if heatmap_repository is None:
+        heatmap_repository = HeatmapRepository(database)
 
     @app.get(
         "/api/v1/health",
@@ -154,6 +163,15 @@ def create_app(
                 code="AIRLINE_NOT_FOUND",
                 message="Airline was not found",
             ) from error
+
+    @app.get(
+        "/api/v1/hourly-heatmap",
+        response_model=HourlyHeatmapResponse,
+    )
+    def hourly_heatmap(
+        limit: int = Query(default=10, ge=1, le=20),
+    ) -> HourlyHeatmapResponse:
+        return heatmap_repository.fetch_heatmap(limit=limit)
 
     return app
 

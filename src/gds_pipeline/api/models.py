@@ -54,3 +54,15 @@ class AirlinesResponse(BaseModel):
 class AirlineTimelineResponse(BaseModel):
     airline_code: AirlineCode
     items: list[TimelinePoint]
+
+class HeatmapCell(BaseModel):
+    airline_code: AirlineCode
+    stat_hour: HourOfDay
+    successful_response_records: NonNegativeInt
+    success_token_count: NonNegativeInt
+
+
+class HourlyHeatmapResponse(BaseModel):
+    airlines: list[AirlineCode]
+    hours: list[HourOfDay]
+    cells: list[HeatmapCell]
