@@ -3,6 +3,7 @@ from pydantic import ValidationError
 from gds_pipeline.api.models import (
     AirlineSummary,
     AirlinesResponse,
+    AirlineTimelineResponse,
     ErrorDetail,
     ErrorResponse,
     HealthResponse,
@@ -145,3 +146,26 @@ def test_airline_summary_rejects_blank_code() -> None:
             successful_response_records=500,
             success_token_count=820,
         )
+
+def test_airline_timeline_response_identifies_airline() -> None:
+    response = AirlineTimelineResponse(
+        airline_code="CA",
+        items=[
+            TimelinePoint(
+                stat_date="2018-08-30",
+                stat_hour=0,
+                successful_response_records=120,
+                success_token_count=205,
+            ),
+            TimelinePoint(
+                stat_date="2018-08-30",
+                stat_hour=1,
+                successful_response_records=135,
+                success_token_count=220,
+            ),
+        ],
+    )
+
+    assert response.airline_code == "CA"
+    assert len(response.items) == 2
+    assert response.items[0].stat_hour == 0

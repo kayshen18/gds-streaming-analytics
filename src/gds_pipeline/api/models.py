@@ -50,3 +50,7 @@ class AirlineSummary(BaseModel):
 class AirlinesResponse(BaseModel):
     total_airlines: NonNegativeInt
     items: list[AirlineSummary]
+
+class AirlineTimelineResponse(BaseModel):
+    airline_code: AirlineCode
+    items: list[TimelinePoint]

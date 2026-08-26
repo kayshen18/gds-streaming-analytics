@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Path, Query
 
 from gds_pipeline.api.config import ApiSettings
 from gds_pipeline.api.database import (
@@ -13,6 +13,7 @@ from gds_pipeline.api.errors import (
 )
 from gds_pipeline.api.models import (
     AirlinesResponse,
+    AirlineTimelineResponse,
     HealthResponse,
     OverviewResponse,
     TimelineResponse,
@@ -30,6 +31,11 @@ from gds_pipeline.api.airlines_repository import (
     AirlinesReader,
     AirlinesRepository,
 )
+from gds_pipeline.api.airline_timeline_repository import (
+    AirlineNotFoundError,
+    AirlineTimelineReader,
+    AirlineTimelineRepository,
+)
 
 
 class AlwaysReadyDatabase:
@@ -42,6 +48,9 @@ def create_app(
     overview_repository: OverviewReader | None = None,
     timeline_repository: TimelineReader | None = None,
     airlines_repository: AirlinesReader | None = None,
+    airline_timeline_repository: (
+        AirlineTimelineReader | None
+    ) = None,
 ) -> FastAPI:
     app = FastAPI(
         title="GDS Streaming Analytics API",
@@ -61,6 +70,11 @@ def create_app(
 
     if airlines_repository is None:
         airlines_repository = AirlinesRepository(database)
+
+    if airline_timeline_repository is None:
+        airline_timeline_repository = (
+            AirlineTimelineRepository(database)
+        )
 
     @app.get(
         "/api/v1/health",
@@ -115,6 +129,31 @@ def create_app(
         limit: int = Query(default=20, ge=1, le=100),
     ) -> AirlinesResponse:
         return airlines_repository.fetch_airlines(limit=limit)
+    @app.get(
+        "/api/v1/airlines/{airline_code}/timeline",
+        response_model=AirlineTimelineResponse,
+    )
+    def airline_timeline(
+        airline_code: str = Path(
+            min_length=1,
+            max_length=8,
+            pattern=r"^[A-Za-z0-9]+$",
+        ),
+    ) -> AirlineTimelineResponse:
+        normalized_code = airline_code.upper()
+
+        try:
+            return (
+                airline_timeline_repository.fetch_airline_timeline(
+                    airline_code=normalized_code,
+                )
+            )
+        except AirlineNotFoundError as error:
+            raise ApiError(
+                status_code=404,
+                code="AIRLINE_NOT_FOUND",
+                message="Airline was not found",
+            ) from error
 
     return app
 
