@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "gds-streaming-analytics"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["confluent-kafka==2.15.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]
