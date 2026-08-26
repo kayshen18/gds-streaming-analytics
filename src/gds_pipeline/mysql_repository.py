@@ -153,6 +153,85 @@ class MySQLRepository:
             cursor.close()
             connection.close()
 
+    def validate_serving(
+        self, snapshot: ValidatedSnapshot
+    ) -> tuple[bool, str]:
+        connection = self._connection_factory(
+            **self.settings.connector_arguments()
+        )
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COUNT(*),
+                       COALESCE(SUM(successful_response_records), 0),
+                       COALESCE(SUM(success_token_count), 0),
+                       COUNT(DISTINCT publication_id)
+                FROM hourly_airline_metrics
+                """
+            )
+            actual = tuple(cursor.fetchone())
+            expected = (
+                snapshot.row_count,
+                snapshot.successful_response_records,
+                snapshot.success_token_count,
+                1,
+            )
+            if actual != expected:
+                return False, f"serving mismatch: expected={expected}, actual={actual}"
+            cursor.execute(
+                """
+                SELECT metrics_sha256 FROM metric_publications
+                WHERE publication_id = (
+                  SELECT MIN(publication_id) FROM hourly_airline_metrics
+                ) AND status = 'published'
+                """
+            )
+            row = cursor.fetchone()
+            actual_hash = None if row is None else row[0]
+            if actual_hash != snapshot.metrics_sha256:
+                return False, (
+                    "serving hash mismatch: "
+                    f"expected={snapshot.metrics_sha256}, actual={actual_hash}"
+                )
+            return True, "serving snapshot matches"
+        finally:
+            cursor.close()
+            connection.close()
+
+    def recent_publications(self, limit: int = 10) -> list[dict[str, object]]:
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        connection = self._connection_factory(
+            **self.settings.connector_arguments()
+        )
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT publication_id, status, source_row_count,
+                       metrics_sha256, completed_at
+                FROM metric_publications
+                ORDER BY started_at DESC LIMIT %s
+                """,
+                (limit,),
+            )
+            return [
+                {
+                    "publication_id": row[0],
+                    "status": row[1],
+                    "row_count": row[2],
+                    "metrics_sha256": row[3],
+                    "completed_at": (
+                        None if row[4] is None else row[4].isoformat()
+                    ),
+                }
+                for row in cursor.fetchall()
+            ]
+        finally:
+            cursor.close()
+            connection.close()
+
     @staticmethod
     def _find_existing(cursor, snapshot: ValidatedSnapshot) -> str | None:
         cursor.execute(

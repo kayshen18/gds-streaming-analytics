@@ -17,6 +17,7 @@ mysql = ["mysql-connector-python==9.7.0"]
 gds-profile = "gds_pipeline.cli:main"
 gds-kafka = "gds_pipeline.kafka_cli:main"
 gds-spark = "gds_pipeline.spark_cli:main"
+gds-mysql = "gds_pipeline.mysql_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
