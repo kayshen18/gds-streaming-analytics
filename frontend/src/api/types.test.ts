@@ -1,6 +1,10 @@
 import { expectTypeOf, test } from 'vitest'
 
-import type { OverviewResponse } from './types'
+import type {
+  AirlineSummary,
+  AirlinesResponse,
+  OverviewResponse,
+} from './types'
 
 
 test('OverviewResponse describes the overview API payload', () => {
@@ -18,4 +22,24 @@ test('OverviewResponse describes the overview API payload', () => {
   expectTypeOf(overview.airline_count).toEqualTypeOf<number>()
   expectTypeOf(overview.start_date).toEqualTypeOf<string>()
   expectTypeOf(overview.publication_id).toEqualTypeOf<string>()
+})
+
+test('AirlinesResponse describes ranked airline results', () => {
+  const airline: AirlineSummary = {
+    airline_code: 'CZ',
+    successful_response_records: 167610,
+    success_token_count: 291028,
+  }
+
+  const response: AirlinesResponse = {
+    total_airlines: 198,
+    items: [airline],
+  }
+
+  expectTypeOf(airline.airline_code).toEqualTypeOf<string>()
+  expectTypeOf(
+    airline.successful_response_records,
+  ).toEqualTypeOf<number>()
+  expectTypeOf(response.total_airlines).toEqualTypeOf<number>()
+  expectTypeOf(response.items).toEqualTypeOf<AirlineSummary[]>()
 })

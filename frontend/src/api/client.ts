@@ -1,5 +1,7 @@
-import type { OverviewResponse } from './types'
-
+import type {
+  AirlinesResponse,
+  OverviewResponse,
+} from './types'
 
 export async function getOverview(): Promise<OverviewResponse> {
   const response = await fetch('/api/v1/overview', {
@@ -15,4 +17,25 @@ export async function getOverview(): Promise<OverviewResponse> {
   }
 
   return (await response.json()) as OverviewResponse
+}
+
+export async function getAirlines(
+  limit: number,
+): Promise<AirlinesResponse> {
+  const response = await fetch(
+    `/api/v1/airlines?limit=${limit}`,
+    {
+      headers: {
+        Accept: 'application/json',
+      },
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Airlines request failed with status ${response.status}`,
+    )
+  }
+
+  return (await response.json()) as AirlinesResponse
 }

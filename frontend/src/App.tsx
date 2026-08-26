@@ -1,17 +1,8 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 
 import './App.css'
+import AirlineAnalysisPage from './pages/AirlineAnalysisPage'
 import OverviewPage from './pages/OverviewPage'
-
-
-function AirlineAnalysisPage() {
-  return (
-    <>
-      <h2>Airline Analysis</h2>
-      <p>Airline ranking and timeline content will appear here.</p>
-    </>
-  )
-}
 
 
 function TimeAnalysisPage() {
