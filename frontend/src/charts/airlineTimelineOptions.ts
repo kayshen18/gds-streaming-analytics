@@ -5,6 +5,10 @@ export function buildAirlineTimelineOptions(
   points: TimelinePoint[],
 ) {
   return {
+    color: [
+      '#5e606c',
+      '#e4babe',
+    ],
     tooltip: {
       trigger: 'axis',
     },

@@ -65,6 +65,13 @@ export function buildHourlyHeatmapOptions(
       orient: 'horizontal',
       left: 'center',
       bottom: 0,
+      inRange: {
+        color: [
+          '#fcf1ef',
+          '#e4babe',
+          '#5e606c',
+        ],
+      },
     },
     series: [
       {
