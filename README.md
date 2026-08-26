@@ -1,9 +1,9 @@
 # Real-time GDS Booking Log Analytics Pipeline
 
 An independent reimplementation and modernization of an undergraduate team
-laboratory project. The repository currently provides a deterministic offline
-baseline plus a tested Kafka ingestion layer for 2.56 million real GDS booking
-log records. All implementation code was rewritten from scratch.
+laboratory project. The repository provides a deterministic offline baseline
+and a tested Kafka, Spark, HDFS, and MySQL pipeline for 2.56 million real GDS
+booking log records. All implementation code was rewritten from scratch.
 
 ## Implemented architecture
 
@@ -31,11 +31,18 @@ GDS text log
                                       |
                                       v
                     HDFS 3.5.0 persistent named volumes
+                                      |
+                                      v
+                    canonical complete snapshot
+                                      |
+                                      v
+                    MySQL 8.4 serving and publication audit
 ```
 
 The Kafka-to-HDFS layer is implemented and tested with isolated end-to-end and
-checkpoint-recovery tests. The next layer will publish aggregate results to
-PostgreSQL, expose an API, and render an ECharts dashboard.
+checkpoint-recovery tests. The final HDFS aggregate is published to MySQL as a
+validated, repeat-safe complete snapshot. A read-only API and ECharts dashboard
+remain the next phase.
 
 ## Why the offline baseline comes first
 
@@ -75,7 +82,7 @@ Docker Compose.
 cd /mnt/c/Users/juno-/Documents/Codex/2026-08-10/linux-shell-fpga/gds-streaming-analytics/.worktrees/offline-baseline
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python -m pip install -e '.[dev,spark,mysql]'
 ```
 
 Start Kafka and create the raw topic:
@@ -89,6 +96,8 @@ See [`docs/kafka-runbook.md`](docs/kafka-runbook.md) for safe stop/reset,
 checkpoint recovery, offset inspection, integration tests, and diagnostics.
 See [`docs/spark-hdfs-runbook.md`](docs/spark-hdfs-runbook.md) for Spark/HDFS
 startup, end-to-end tests, full-data processing, validation, and recovery.
+See [`docs/mysql-runbook.md`](docs/mysql-runbook.md) for MySQL configuration,
+snapshot export/publication, repeat safety, restart recovery, and diagnostics.
 
 ## Commands
 
@@ -224,6 +233,27 @@ same query restarted and consumed only 60 new records. Final reconciliation
 found exactly 100 unique Kafka `(partition, offset)` locations; the automated
 demonstration completed in 4 minutes 47.67 seconds.
 
+## Verified full MySQL publication
+
+The accepted HDFS aggregate was exported as a canonical complete snapshot and
+published to persistent MySQL 8.4 on 2026-08-13.
+
+| Measurement | Result |
+|---|---:|
+| Serving rows | 3,203 |
+| Successful response records | 1,310,068 |
+| Success tokens | 2,145,511 |
+| Canonical SHA-256 | `9b0f4a3afc33e73461414ff2d60a2653e32a5fdbcfe8a810b8b2b42525fcc0be` |
+| Initial publication wall time | 1.66 s |
+| Repeat unchanged check | 1.25 s |
+| Initial maximum RSS | 32,028 KiB |
+
+The initial publication produced ID
+`126fa842-3721-4233-991f-8fd3b9e22929`. Publishing the identical snapshot a
+second time returned `unchanged` with the same ID and no metric increase.
+Stopping and recreating the container preserved the snapshot in the named
+volume, and post-restart validation matched all expected totals and the hash.
+
 ## Limitations
 
 - The local broker is a single combined controller/broker with replication
@@ -232,8 +262,11 @@ demonstration completed in 4 minutes 47.67 seconds.
 - The in-memory duplicate detector stores every event ID; the measured full run
   used about 571 MiB maximum RSS. Larger datasets should use a bounded or
   external deduplication strategy.
-- PostgreSQL publication, the API, and dashboard remain future phases and are
-  not claimed as implemented.
+- MySQL is a single local container without TLS, replication, automated backup,
+  or high availability. Snapshot replacement is transactionally protected, but
+  this does not claim a distributed exactly-once guarantee.
+- The read-only API and dashboard remain future phases and are not claimed as
+  implemented.
 - The full Spark benchmark used one worker and one HDFS DataNode; it demonstrates
   pipeline correctness and recovery semantics, not horizontal scalability or
   infrastructure failover.
