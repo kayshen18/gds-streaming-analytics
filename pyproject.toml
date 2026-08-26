@@ -10,6 +10,7 @@ dependencies = ["confluent-kafka==2.15.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]
+spark = ["pyspark==4.1.3"]
 
 [project.scripts]
 gds-profile = "gds_pipeline.cli:main"

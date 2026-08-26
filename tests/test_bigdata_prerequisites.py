@@ -72,3 +72,10 @@ def test_prerequisite_script_has_resource_modes_and_safety() -> None:
     assert "20 * 1024 * 1024" in script
     assert "6 * 1024 * 1024" in script
     assert "8 * 1024 * 1024" in script
+
+
+def test_pyspark_extra_exactly_matches_runtime_version() -> None:
+    versions = load_versions()
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert f'pyspark=={versions["SPARK_VERSION"]}' in pyproject
