@@ -294,4 +294,3 @@ The ordered units are:
 This phase does not implement authentication, data mutation, WebSocket
 streaming, automatic polling, fabricated live status, alerting, a Kafka/Spark
 administration console, cloud deployment, or a mobile application.
-
