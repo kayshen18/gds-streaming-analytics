@@ -1,16 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 
 import './App.css'
-
-
-function OverviewPage() {
-  return (
-    <>
-      <h2>Overview</h2>
-      <p>Analytics overview content will appear here.</p>
-    </>
-  )
-}
+import OverviewPage from './pages/OverviewPage'
 
 
 function AirlineAnalysisPage() {

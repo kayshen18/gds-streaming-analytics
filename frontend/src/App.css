@@ -91,3 +91,44 @@
     padding: 32px 20px;
   }
 }
+
+.metrics-grid {
+  margin: 32px 0 0;
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.metric-card {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(16 24 40 / 8%);
+}
+
+.metric-card dt {
+  color: #667085;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.metric-card dd {
+  margin: 12px 0 0;
+  color: #101828;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.app-shell [role="alert"] {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border: 1px solid #fda29b;
+  border-radius: 10px;
+  color: #b42318;
+  background: #fef3f2;
+}
