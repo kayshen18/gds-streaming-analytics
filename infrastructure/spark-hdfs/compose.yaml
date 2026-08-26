@@ -65,7 +65,7 @@ services:
       - ./hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
       - hdfs-namenode-data:/data/dfs/name
     healthcheck:
-      test: ["CMD-SHELL", "hdfs dfsadmin -safemode get >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/hdfs-namenode/8020'"]
       interval: 5s
       timeout: 5s
       retries: 36
@@ -86,7 +86,7 @@ services:
       - ./hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
       - hdfs-datanode-data:/data/dfs/data
     healthcheck:
-      test: ["CMD-SHELL", "hdfs dfsadmin -report 2>/dev/null | grep -q 'Live datanodes (1)'"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/hdfs-datanode/9866'"]
       interval: 5s
       timeout: 5s
       retries: 36

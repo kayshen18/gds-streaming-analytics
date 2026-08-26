@@ -23,6 +23,26 @@ def test_compose_defines_pinned_hdfs_services_and_healthchecks() -> None:
     assert "9870:9870" in compose
 
 
+def test_namenode_healthcheck_does_not_start_a_slow_hadoop_cli() -> None:
+    compose = read(COMPOSE)
+    namenode = compose.split("  hdfs-namenode:", 1)[1].split(
+        "  hdfs-datanode:", 1
+    )[0]
+
+    assert "/dev/tcp/hdfs-namenode/8020" in namenode
+    assert "hdfs dfsadmin" not in namenode
+
+
+def test_datanode_healthcheck_does_not_start_a_slow_hadoop_cli() -> None:
+    compose = read(COMPOSE)
+    datanode = compose.split("  hdfs-datanode:", 1)[1].split(
+        "  spark-master:", 1
+    )[0]
+
+    assert "/dev/tcp/hdfs-datanode/9866" in datanode
+    assert "hdfs dfsadmin" not in datanode
+
+
 def test_namenode_is_formatted_once_without_overwriting_existing_metadata() -> None:
     compose = read(COMPOSE)
     assert "/data/dfs/name/current/VERSION" in compose
