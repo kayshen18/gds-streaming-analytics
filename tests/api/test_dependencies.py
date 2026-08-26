@@ -16,5 +16,5 @@ def test_api_extra_pins_compatible_versions() -> None:
         "fastapi==0.141.1",
         "uvicorn[standard]==0.52.3",
         "pydantic==2.13.4",
-        "httpx==0.28.1",
+        "httpx2==2.10.0",
     ]
