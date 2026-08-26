@@ -177,3 +177,86 @@ def test_verify_count_mismatch_returns_nonzero(monkeypatch) -> None:
     )
 
     assert code == 7
+
+def test_simulate_command_maps_arguments(
+    monkeypatch,
+    capsys,
+) -> None:
+    captured: dict[str, object] = {}
+    fake_generator = object()
+
+    def fake_generator_factory(**kwargs):
+        captured["generator_arguments"] = kwargs
+        return fake_generator
+
+    def fake_simulate(
+        settings,
+        *,
+        generator,
+        run_id,
+    ):
+        captured["settings"] = settings
+        captured["generator"] = generator
+        captured["run_id"] = run_id
+        return ProductionSummary(
+            submitted=4,
+            acknowledged=4,
+            failed=0,
+            last_contiguous_confirmed_line=4,
+            remaining_after_flush=0,
+            interrupted=False,
+            elapsed_seconds=0.2,
+        )
+
+    monkeypatch.setattr(
+        "gds_pipeline.kafka_cli.SimulatedRecordGenerator",
+        fake_generator_factory,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "gds_pipeline.kafka_cli.simulate_to_kafka",
+        fake_simulate,
+        raising=False,
+    )
+
+    code = main(
+        [
+            "simulate",
+            "--bootstrap-servers",
+            "localhost:9092",
+            "--topic",
+            "gds.raw.v1",
+            "--airlines",
+            "CZ,MU,CA",
+            "--rate",
+            "25",
+            "--limit",
+            "4",
+            "--seed",
+            "17",
+            "--run-id",
+            "demo-run",
+            "--response-probability",
+            "0.6",
+            "--success-probability",
+            "0.85",
+        ]
+    )
+
+    assert code == 0
+
+    settings = captured["settings"]
+    assert settings.bootstrap_servers == "localhost:9092"
+    assert settings.topic == "gds.raw.v1"
+    assert settings.rate == 25
+    assert settings.limit == 4
+
+    assert captured["generator_arguments"] == {
+        "airline_codes": ("CZ", "MU", "CA"),
+        "seed": 17,
+        "response_probability": 0.6,
+        "success_probability": 0.85,
+    }
+    assert captured["generator"] is fake_generator
+    assert captured["run_id"] == "demo-run"
+    assert "simulation complete" in capsys.readouterr().out
