@@ -22,59 +22,43 @@ def run_pipeline_case(root: Path) -> dict[str, object]:
     _create_topic(admin, topic)
     try:
         _produce_case(topic)
-        _run_checked(
-            root,
-            [
-                "docker",
-                "exec",
-                "-e",
-                "PYTHONPATH=/opt/gds-app/src",
-                "gds-spark-submit",
-                "/opt/spark/bin/spark-submit",
-                "--master",
-                "spark://spark-master:7077",
-                "/opt/gds-app/src/gds_pipeline/spark_cli.py",
-                "stream",
-                "--bootstrap-servers",
-                "kafka:29092",
-                "--topic",
-                topic,
-                "--starting-offsets",
-                "earliest",
-                "--hdfs-root",
-                hdfs_root,
-                "--checkpoint-root",
-                checkpoint_root,
-                "--output-version",
-                "v1",
-                "--trigger",
-                "available-now",
-                "--merge-after",
+        _run_pipeline(root, topic, hdfs_root, checkpoint_root)
+        return _inspect_pipeline(root, hdfs_root, checkpoint_root)
+    finally:
+        _delete_topic(admin, topic)
+        _cleanup_hdfs(root, hdfs_root, checkpoint_root)
+
+
+def run_recovery_case(root: Path) -> dict[str, object]:
+    run_id = uuid4().hex
+    topic = f"gds.recovery.{run_id}"
+    hdfs_root = f"hdfs://hdfs-namenode:8020/data/gds-pipeline-recovery/{run_id}"
+    checkpoint_root = (
+        f"hdfs://hdfs-namenode:8020/checkpoints/gds-pipeline-recovery/{run_id}"
+    )
+    admin = AdminClient({"bootstrap.servers": "localhost:9092"})
+    _create_topic(admin, topic)
+    try:
+        records = _case_records()
+        _produce_records(topic, records[:40])
+        _run_pipeline(root, topic, hdfs_root, checkpoint_root)
+        first = _inspect_pipeline(root, hdfs_root, checkpoint_root)
+
+        _produce_records(topic, records[40:])
+        _run_pipeline(root, topic, hdfs_root, checkpoint_root)
+        second = _inspect_pipeline(root, hdfs_root, checkpoint_root)
+        return {
+            "first_run_input_count": first["input_count"],
+            "second_run_input_count": second["input_count"],
+            "raw_plus_envelope_dead_count": second[
+                "raw_plus_envelope_dead_count"
             ],
-            timeout=360,
-        )
-        inspection = _run_checked(
-            root,
-            [
-                "docker",
-                "exec",
-                "-e",
-                "PYTHONPATH=/opt/gds-app/src",
-                "gds-spark-submit",
-                "/opt/spark/bin/spark-submit",
-                "--master",
-                "spark://spark-master:7077",
-                "/opt/gds-app/tests/integration/spark_pipeline_inspect_runner.py",
-                hdfs_root,
-                checkpoint_root,
+            "clean_plus_business_dead_count": second[
+                "clean_plus_business_dead_count"
             ],
-            timeout=240,
-        )
-        marker = "PIPELINE_SUMMARY="
-        summary_line = next(
-            line for line in inspection.stdout.splitlines() if line.startswith(marker)
-        )
-        return json.loads(summary_line.removeprefix(marker))
+            "unique_kafka_locations": second["unique_kafka_locations"],
+            "airline_metrics": second["airline_metrics"],
+        }
     finally:
         _delete_topic(admin, topic)
         _cleanup_hdfs(root, hdfs_root, checkpoint_root)
@@ -93,6 +77,33 @@ def _delete_topic(admin: AdminClient, topic: str) -> None:
 
 
 def _produce_case(topic: str) -> None:
+    _produce_records(topic, _case_records())
+
+
+def _case_records() -> list[str | bytes]:
+    records: list[str | bytes] = []
+    records.extend(
+        f"CA{index},ITARES,20180830,19,19:00:{index:02d}:000,CA:success;"
+        for index in range(50)
+    )
+    records.extend(
+        f"BOTH{index},ITARES,20180830,19,19:01:{index:02d}:000,"
+        "CA:success;CA:success;MU:success;"
+        for index in range(10)
+    )
+    records.extend(
+        f"REQ{index},ITAREQ,20180830,19,19:02:{index:02d}:000,payload"
+        for index in range(20)
+    )
+    records.extend(
+        f"BAD{index},ITARES,20180830,24,19:03:{index:02d}:000"
+        for index in range(10)
+    )
+    records.extend(b"not-json" for _ in range(10))
+    return records
+
+
+def _produce_records(topic: str, records: list[str | bytes]) -> None:
     producer = Producer(
         {
             "bootstrap.servers": "localhost:9092",
@@ -100,39 +111,74 @@ def _produce_case(topic: str) -> None:
             "enable.idempotence": True,
         }
     )
-    line_number = 1
-
-    def publish(raw_line: str) -> None:
-        nonlocal line_number
-        event = build_event(
-            source_file="integration-100.txt",
-            source_sha256="b" * 64,
-            line_number=line_number,
-            raw_line=raw_line,
-        )
-        producer.produce(topic, key=event.kafka_key(), value=event.to_json_bytes())
-        producer.poll(0)
-        line_number += 1
-
-    for index in range(50):
-        publish(
-            f"CA{index},ITARES,20180830,19,19:00:{index:02d}:000,CA:success;"
-        )
-    for index in range(10):
-        publish(
-            f"BOTH{index},ITARES,20180830,19,19:01:{index:02d}:000,"
-            "CA:success;CA:success;MU:success;"
-        )
-    for index in range(20):
-        publish(f"REQ{index},ITAREQ,20180830,19,19:02:{index:02d}:000,payload")
-    for index in range(10):
-        publish(f"BAD{index},ITARES,20180830,24,19:03:{index:02d}:000")
-    for index in range(10):
-        producer.produce(topic, key=f"BROKEN{index}".encode(), value=b"not-json")
+    for record in records:
+        if isinstance(record, bytes):
+            producer.produce(topic, key=uuid4().hex.encode(), value=record)
+        else:
+            event = build_event(
+                source_file="integration-100.txt",
+                source_sha256="b" * 64,
+                line_number=_record_line_number(record),
+                raw_line=record,
+            )
+            producer.produce(
+                topic, key=event.kafka_key(), value=event.to_json_bytes()
+            )
         producer.poll(0)
     remaining = producer.flush(30)
     if remaining:
         raise RuntimeError(f"failed to deliver {remaining} integration messages")
+
+
+def _record_line_number(record: str) -> int:
+    group_id = record.split(",", 1)[0]
+    if group_id.startswith("CA"):
+        return int(group_id[2:]) + 1
+    if group_id.startswith("BOTH"):
+        return int(group_id[4:]) + 51
+    if group_id.startswith("REQ"):
+        return int(group_id[3:]) + 61
+    return int(group_id[3:]) + 81
+
+
+def _run_pipeline(
+    root: Path, topic: str, hdfs_root: str, checkpoint_root: str
+) -> None:
+    _run_checked(
+        root,
+        [
+            "docker", "exec", "-e", "PYTHONPATH=/opt/gds-app/src",
+            "gds-spark-submit", "/opt/spark/bin/spark-submit",
+            "--master", "spark://spark-master:7077",
+            "/opt/gds-app/src/gds_pipeline/spark_cli.py", "stream",
+            "--bootstrap-servers", "kafka:29092", "--topic", topic,
+            "--starting-offsets", "earliest", "--hdfs-root", hdfs_root,
+            "--checkpoint-root", checkpoint_root, "--output-version", "v1",
+            "--trigger", "available-now", "--merge-after",
+        ],
+        timeout=360,
+    )
+
+
+def _inspect_pipeline(
+    root: Path, hdfs_root: str, checkpoint_root: str
+) -> dict[str, object]:
+    inspection = _run_checked(
+        root,
+        [
+            "docker", "exec", "-e", "PYTHONPATH=/opt/gds-app/src",
+            "gds-spark-submit", "/opt/spark/bin/spark-submit",
+            "--master", "spark://spark-master:7077",
+            "/opt/gds-app/tests/integration/spark_pipeline_inspect_runner.py",
+            hdfs_root, checkpoint_root,
+        ],
+        timeout=240,
+    )
+    marker = "PIPELINE_SUMMARY="
+    summary_line = next(
+        line for line in inspection.stdout.splitlines() if line.startswith(marker)
+    )
+    return json.loads(summary_line.removeprefix(marker))
 
 
 def _run_checked(root: Path, command: list[str], *, timeout: int):
