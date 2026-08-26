@@ -262,3 +262,52 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.limit-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.limit-control label {
+  color: #475467;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.limit-control select {
+  padding: 9px 34px 9px 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  color: #344054;
+  background: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.limit-control select:hover:not(:disabled) {
+  border-color: #98a2b3;
+}
+
+.limit-control select:focus-visible {
+  border-color: #2563eb;
+  outline: 3px solid rgb(37 99 235 / 16%);
+}
+
+.limit-control select:disabled {
+  color: #98a2b3;
+  background: #f2f4f7;
+  cursor: wait;
+}
+
+@media (max-width: 520px) {
+  .limit-control {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .limit-control select {
+    width: 100%;
+  }
+}

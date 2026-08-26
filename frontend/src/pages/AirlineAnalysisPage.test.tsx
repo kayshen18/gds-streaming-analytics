@@ -1,4 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import {
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getAirlines } from '../api/client'
@@ -102,5 +107,29 @@ describe('AirlineAnalysisPage', () => {
     expect(
       screen.queryByText('database connection was refused'),
     ).not.toBeInTheDocument()
+  })
+  it('reloads rankings when the limit changes', async () => {
+    getAirlinesMock.mockResolvedValue(airlinesPayload)
+
+    const user = userEvent.setup()
+
+    render(<AirlineAnalysisPage />)
+
+    await screen.findByRole('table', {
+      name: 'Airline rankings',
+    })
+
+    await user.selectOptions(
+      screen.getByRole('combobox', {
+        name: 'Number of airlines',
+      }),
+      '20',
+    )
+
+    await waitFor(() => {
+      expect(getAirlinesMock).toHaveBeenLastCalledWith(20)
+    })
+
+    expect(getAirlinesMock).toHaveBeenCalledTimes(2)
   })
 })
