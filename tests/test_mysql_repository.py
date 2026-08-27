@@ -100,6 +100,12 @@ class FakeCursor:
                 None,
             )
             self.result = (match,) if match else None
+        elif normalized.startswith("SELECT EXISTS"):
+            is_current = any(
+                row[5] == params[0]
+                for row in self.state.serving
+            )
+            self.result = (1 if is_current else 0,)
         elif normalized.startswith("INSERT INTO metric_publications"):
             failure_message = params[8] if len(params) == 9 else None
             self.state.publications.append(
@@ -203,6 +209,46 @@ def test_repeat_snapshot_is_unchanged_without_rewriting_serving() -> None:
     assert result.publication_id == "existing"
     assert state.serving == before
     assert not state.locked
+
+
+def test_previously_published_snapshot_can_replace_current_serving() -> None:
+    state = FakeState(
+        serving=[
+            (
+                "2026-08-26",
+                0,
+                "CZ",
+                100,
+                100,
+                "current-live",
+            )
+        ]
+    )
+    state.publications.append(
+        {
+            "publication_id": "historical",
+            "source_hdfs_root": "hdfs://example/data/gds",
+            "output_version": "v1",
+            "metrics_sha256": "a" * 64,
+            "status": "published",
+        }
+    )
+    repository, _ = _repository(state)
+
+    result = repository.publish(_snapshot())
+
+    assert result.status == "published"
+    assert result.publication_id != "historical"
+    assert [
+        (row[0], row[1], row[2], row[3], row[4])
+        for row in state.serving
+    ] == [
+        ("2018-08-30", 0, "CA", 2, 3),
+        ("2018-08-30", 1, "MU", 1, 1),
+    ]
+    assert {row[5] for row in state.serving} == {
+        result.publication_id
+    }
 
 
 def test_verification_failure_rolls_back_previous_serving_snapshot() -> None:

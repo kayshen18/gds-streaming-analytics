@@ -67,8 +67,15 @@ class MySQLRepository:
 
             if not force:
                 existing = self._find_existing(cursor, snapshot)
-                if existing is not None:
-                    return self._result(existing, "unchanged", snapshot)
+                if (
+                    existing is not None
+                    and self._is_current_serving(cursor, existing)
+                ):
+                    return self._result(
+                        existing,
+                        "unchanged",
+                        snapshot,
+                    )
 
             # With autocommit disabled, the advisory-lock SELECT starts an
             # implicit transaction.  Advisory locks survive COMMIT, so end
@@ -254,6 +261,24 @@ class MySQLRepository:
         )
         row = cursor.fetchone()
         return None if row is None else row[0]
+
+    @staticmethod
+    def _is_current_serving(
+        cursor,
+        publication_id: str,
+    ) -> bool:
+        cursor.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM hourly_airline_metrics
+              WHERE publication_id = %s
+            )
+            """,
+            (publication_id,),
+        )
+        row = cursor.fetchone()
+        return row is not None and row[0] == 1
 
     def _insert_staging(
         self, cursor, snapshot: ValidatedSnapshot, publication_id: str

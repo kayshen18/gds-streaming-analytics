@@ -7,4 +7,5 @@ infrastructure/mysql/*.yaml text eol=lf
 infrastructure/mysql/*.env text eol=lf
 infrastructure/mysql/.env.example text eol=lf
 infrastructure/mysql/init/*.sql text eol=lf
-
+# Python source files must use Unix line endings.
+*.py text eol=lf
