@@ -2,3 +2,9 @@ tests/fixtures/mysql_snapshot/*.csv text eol=lf
 tests/fixtures/mysql_snapshot/*.json text eol=lf
 # Shell scripts must use Unix line endings.
 *.sh text eol=lf
+# Docker Compose and MySQL configuration must use Unix line endings.
+infrastructure/mysql/*.yaml text eol=lf
+infrastructure/mysql/*.env text eol=lf
+infrastructure/mysql/.env.example text eol=lf
+infrastructure/mysql/init/*.sql text eol=lf
+
