@@ -1,335 +1,182 @@
-# Real-time GDS Booking Log Analytics Pipeline
+<h1 align="center">Real-time GDS Booking Log Analytics Pipeline</h1>
 
-An independent reimplementation and modernization of an undergraduate team
-laboratory project. The repository provides a deterministic offline baseline
-and a tested Kafka, Spark, HDFS, and MySQL pipeline for 2.56 million real GDS
-booking log records. All implementation code was rewritten from scratch.
 
-## Implemented architecture
+The pipeline ingests GDS events through Kafka, processes and aggregates them
+with Spark Structured Streaming, stores durable outputs in HDFS, publishes
+validated snapshots to MySQL, and exposes the results through a FastAPI-powered
+analytics dashboard.
 
-```text
-GDS text log
-    |-- offline profiler
-    |     |-- strict UTF-8 parsing and data-quality classification
-    |     `-- deterministic hourly-airline reference metrics
-    |
-    `-- Python Kafka producer
-          |-- versioned JSON envelope and stable event_id
-          |-- acks=all and idempotent client retries
-          |-- rate limiting and asynchronous delivery accounting
-          `-- atomic contiguous checkpoint
-                    |
-                    v
-          Kafka 4.3.1 / KRaft / gds.raw.v1 / 3 partitions
-                    |
-                    v
-          Spark 4.1.3 Structured Streaming
-                    |-- versioned envelope and GDS validation
-                    |-- raw, clean, dead-letter and quality Parquet
-                    |-- checkpointed offset recovery
-                    `-- hourly airline record/token metrics
-                                      |
-                                      v
-                    HDFS 3.5.0 persistent named volumes
-                                      |
-                                      v
-                    canonical complete snapshot
-                                      |
-                                      v
-                    MySQL 8.4 serving and publication audit
-                                      |
-                                      v
-                    FastAPI read-only analytics API
-                                      |
-                                      v
-                    React + TypeScript + ECharts dashboard
-```
+> The live demo uses system-generated synthetic GDS events rather than traffic
+> collected from a production airline system.
 
-## Analytics API and dashboard
+## Architecture
 
-The MySQL serving snapshot is exposed through a read-only FastAPI application
-and visualized by a React, TypeScript, and ECharts dashboard.
+<p align="center">
+  <img
+    src="docs/images/gds-streaming-architecture.svg"
+    alt="GDS Streaming Analytics end-to-end architecture"
+    width="760"
+  />
+</p>
 
-The dashboard provides:
+## Run locally
 
-- overview KPI cards, publication metadata, loading, refresh, and safe error states;
-- ranked airline metrics with selectable Top 5, Top 10, and Top 20 limits;
-- per-airline hourly response and token timelines;
-- a system-wide hourly dual-line timeline;
-- an airline-by-hour activity heatmap with selectable ranking limits;
-- API health and snapshot publication status;
-- responsive navigation across overview, airline, time, and pipeline pages.
+### Requirements
 
-The frontend uses typed API contracts and a Vite development proxy. Chart
-components register only the required ECharts modules to reduce the production
-bundle size.
+- Windows 10/11 with WSL2
+- Docker Desktop with WSL integration enabled
+- Python 3.11 or later
+- Node.js 22.22.2 through `nvm`
+- Git
 
-The Kafka-to-HDFS layer is implemented and tested with isolated end-to-end and
-checkpoint-recovery tests. The final HDFS aggregate is published to MySQL as a
-validated, repeat-safe complete snapshot. A read-only FastAPI service exposes
-the published snapshot to a responsive React and ECharts analytics dashboard.
-
-## Why the offline baseline comes first
-
-A distributed job can finish successfully while producing incorrect counts.
-The offline profiler is a small, auditable reference implementation whose
-results the later Spark pipeline must reproduce. It streams the file instead of
-loading it fully into memory and writes deterministic JSON and CSV artifacts.
-
-## Event contract and delivery semantics
-
-Every physical source line becomes a UTF-8 JSON event containing:
-
-- `schema_version`
-- stable SHA-256 `event_id`
-- source filename and source-file SHA-256
-- physical source line number
-- `group_id`
-- unmodified raw line
-- UTC production timestamp
-
-The canonical event identity is SHA-256 over
-`1\n{source_sha256}\n{line_number}\n{raw_line}`. The timestamp is not part of
-the identity, so retries of the same source record remain detectable.
-
-The producer provides **at-least-once delivery**, not end-to-end exactly once.
-Kafka acknowledgements can arrive out of order, so the checkpoint advances only
-over a contiguous run of confirmed source lines. A crash after a broker
-acknowledgement but before a checkpoint write can reproduce a boundary event;
-the stable `event_id` allows downstream deduplication.
-
-## Local setup
-
-Requirements: WSL2, Python 3.11+, Docker Desktop with WSL integration, and
-Docker Compose.
+### 1. Clone the repository
 
 ```bash
-cd /mnt/c/Users/juno-/Documents/Codex/2026-08-10/linux-shell-fpga/gds-streaming-analytics/.worktrees/offline-baseline
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev,spark,mysql]'
+git clone https://github.com/kayshen18/gds-streaming-analytics.git
+cd gds-streaming-analytics
 ```
 
-Start Kafka and create the raw topic:
+### 2. Install the Python dependencies
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev,spark,mysql,api]'
+```
+
+### 3. Install the frontend dependencies
+
+```bash
+cd frontend
+nvm use
+npm ci
+cd ..
+```
+
+### 4. Configure MySQL
+
+```bash
+cp infrastructure/mysql/.env.example infrastructure/mysql/.env
+nano infrastructure/mysql/.env
+```
+
+Replace the example passwords in `.env` with local development passwords.
+The real `.env` file is ignored by Git and must not be committed.
+
+### 5. Start the infrastructure
+
+Make sure Docker Desktop is running, then execute:
 
 ```bash
 bash scripts/kafka-up.sh
-bash scripts/kafka-create-topic.sh
+bash scripts/bigdata-up.sh
+bash scripts/mysql-up.sh
 ```
 
-See [`docs/kafka-runbook.md`](docs/kafka-runbook.md) for safe stop/reset,
-checkpoint recovery, offset inspection, integration tests, and diagnostics.
-See [`docs/spark-hdfs-runbook.md`](docs/spark-hdfs-runbook.md) for Spark/HDFS
-startup, end-to-end tests, full-data processing, validation, and recovery.
-See [`docs/mysql-runbook.md`](docs/mysql-runbook.md) for MySQL configuration,
-snapshot export/publication, repeat safety, restart recovery, and diagnostics.
-
-## Commands
-
-Run the offline profiler:
+Create the synthetic demo topic if it does not already exist:
 
 ```bash
-gds-profile profile \
-  --input "data/raw/kafka采集数据实验.txt" \
-  --output outputs/full-baseline
+docker exec gds-kafka \
+  /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:29092 \
+  --create \
+  --if-not-exists \
+  --topic gds.simulated.v1 \
+  --partitions 3 \
+  --replication-factor 1
 ```
 
-Run a 100-record Kafka smoke test:
+### 6. Publish demo analytics data
 
 ```bash
-gds-kafka produce \
-  --input "data/raw/kafka采集数据实验.txt" \
-  --bootstrap-servers localhost:9092 \
-  --topic gds.raw.v1 \
-  --limit 100 \
-  --rate 1000 \
-  --checkpoint .checkpoints/smoke.json \
-  --reset-checkpoint
-
-gds-kafka verify \
-  --bootstrap-servers localhost:9092 \
-  --topic gds.raw.v1 \
-  --expected-count 100 \
-  --idle-timeout 20
+bash scripts/live-demo-refresh.sh \
+  --iterations 1 \
+  --events-per-cycle 100 \
+  --rate 10
 ```
 
-### Synthetic live analytics demo
+This command generates synthetic GDS events and processes them through Kafka,
+Spark Structured Streaming, HDFS, and MySQL.
 
-The repository includes a configurable synthetic event generator for
-demonstrating the live pipeline without claiming access to real airline
-production systems. Generated records use the project's GDS text format and
-current UTC timestamps, while Kafka, Spark Structured Streaming, HDFS, MySQL,
-FastAPI, and the dashboard all run as real infrastructure components.
+### 7. Start the FastAPI backend
 
-Start Kafka, Spark/HDFS, and MySQL before running the demo. Then activate the
-Python environment and run bounded refresh cycles:
+Open a new WSL terminal in the repository root:
 
 ```bash
 source .venv/bin/activate
 
-bash scripts/live-demo-refresh.sh \
-  --iterations 3 \
-  --interval 15 \
-  --events-per-cycle 30 \
-  --rate 5
+set -a
+source infrastructure/mysql/.env
+set +a
 
-Each cycle:
-1. publishes synthetic GDS records to gds.simulated.v1;
-2. consumes new Kafka offsets with Spark's available-now trigger;
-3. merges and validates the cumulative HDFS metrics;
-4. exports and transactionally publishes a new MySQL snapshot;
-5. validates that the serving tables match the exported snapshot.
-The bounded available-now design avoids resource contention on the local
-single-worker Spark deployment. It demonstrates repeatable near-real-time
-micro-batch processing rather than direct collection from a production airline
-system.
-The dashboard Overview page requests the latest API snapshot automatically
-every 30 seconds. A visible change occurs only after a refresh cycle has
-successfully published a new MySQL snapshot.
-
-Run unit tests without touching Kafka:
-
-```bash
-pytest -q
+python -m uvicorn \
+  gds_pipeline.api.main:create_runtime_app \
+  --factory \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
-Explicitly run real-broker recovery tests:
+Keep this terminal running.
+
+### 8. Start the React frontend
+
+Open another WSL terminal:
 
 ```bash
-RUN_KAFKA_INTEGRATION=1 \
-pytest tests/integration/test_kafka_recovery.py -v
+cd frontend
+nvm use
+
+npm run dev -- --host 0.0.0.0
 ```
 
-## Verified source baseline
+Keep this terminal running, then open:
 
-The supplied source was processed twice offline. Deterministic CSV and JSON
-artifacts from both runs had identical SHA-256 hashes.
+```text
+http://localhost:5173
+```
 
-| Measurement | Result |
-|---|---:|
-| Source size | 211,615,939 bytes |
-| Source SHA-256 | `301356b0877d4a2afb2f6c904487654ea1083f03a77e7f7c4e00cd4e62df85a7` |
-| Physical records | 2,563,566 |
-| Valid records | 2,560,708 |
-| Invalid records | 2,858 |
-| ITARES records | 1,278,977 |
-| ITAREQ records | 1,281,731 |
-| Hour-airline result groups | 3,203 |
-| Observed airline codes | 198 |
-| Successful response records | 1,310,068 |
-| Success tokens | 2,145,511 |
-| Duplicate groups | 1 |
-| Duplicate copies after the first | 2,857 |
+The FastAPI documentation is available at:
 
-All invalid records are copies of the comma-only record `,,,,,,,,`, classified
-as `missing_group_id`. Two offline runs took 50.8-51.8 seconds on Windows Python
-3.12 against the same NTFS worktree, about 49,500-50,400 records per second.
+```text
+http://127.0.0.1:8000/docs
+```
 
-The earlier course report stated 2,145,510 success tokens, one fewer than the
-independent baseline. The discrepancy is documented rather than forcing the new
-implementation to reproduce the old value.
+## Dashboard
 
-## Verified full Kafka benchmark
+<p align="center">
+  <img
+    src="docs/images/dashboard-overview.png"
+    alt="GDS Analytics Dashboard overview"
+    width="900"
+  />
+</p>
 
-Measured locally on 2026-08-12 with Python 3.13.9, confluent-kafka 2.15.0,
-Kafka 4.3.1, Docker Engine 29.7.2, Docker Compose 5.3.1, and a WSL2 VM exposing
-15 GiB RAM. The single broker used three partitions and replication factor one.
+<p align="center">
+  <img
+    src="docs/images/dashboard-airlinerankings.png"
+    alt="GDS Analytics Dashboard overview"
+    width="900"
+  />
+</p>
 
-| Measurement | Result |
-|---|---:|
-| Source records submitted | 2,563,566 |
-| Broker acknowledgements | 2,563,566 |
-| Delivery failures | 0 |
-| Messages remaining after flush | 0 |
-| Final checkpoint line | 2,563,566 |
-| Partition 0 end offset | 867,964 |
-| Partition 1 end offset | 837,813 |
-| Partition 2 end offset | 857,789 |
-| Producer GNU wall time | 88.76 s |
-| Producer end-to-end throughput | ~28,884 records/s |
-| Producer maximum RSS | 73,648 KiB |
-| Verifier records read | 2,563,566 |
-| Verifier valid / invalid | 2,563,566 / 0 |
-| Verifier duplicate event IDs | 0 |
-| Verifier GNU wall time | 37.10 s |
-| Verifier throughput | ~69,099 records/s |
-| Verifier maximum RSS | 585,000 KiB |
+<p align="center">
+  <img
+    src="docs/images/dashboard-timelines.png"
+    alt="GDS Analytics Dashboard overview"
+    width="900"
+  />
+</p>
 
-The producer's internal timer reported 81.656 seconds, but the table uses the
-more conservative GNU wall-clock measurement covering process startup and exit.
-Kafka remained healthy after both runs, no swap was used, and recent broker logs
-contained no matches for `error`, `exception`, `fatal`, or `outofmemory`.
+<p align="center">
+  <img
+    src="docs/images/dashboard-heatmap.png"
+    alt="GDS Analytics Dashboard overview"
+    width="900"
+  />
+</p>
 
-## Verified full Spark/HDFS benchmark
-
-Measured locally on 2026-08-13 with Spark 4.1.3, Hadoop 3.5.0, one Spark
-worker with two cores and 2 GiB executor memory, and the complete
-`gds.raw.v1` topic.
-
-| Measurement | Result |
-|---|---:|
-| Kafka input records | 2,563,566 |
-| Business-valid records | 2,560,708 |
-| Dead-letter records | 2,858 |
-| Final hour-airline groups | 3,203 |
-| Successful response records | 1,310,068 |
-| Success tokens | 2,145,511 |
-| Available-now wall time | 21 min 17.86 s |
-| End-to-end throughput | ~2,006 records/s |
-| HDFS space after run | 526.39 MiB |
-| Missing/corrupt HDFS blocks | 0 / 0 |
-
-Spark's canonical sorted aggregate CSV had SHA-256
-`9b0f4a3afc33e73461414ff2d60a2653e32a5fdbcfe8a810b8b2b42525fcc0be`,
-identical to two independent offline baseline runs. The full run exited zero,
-published one batch commit marker and a matching Structured Streaming
-checkpoint commit, and its log scan found no error, exception, fatal,
-out-of-memory, or killed entries.
-
-The processing-time path was also exercised with two waves against one
-checkpoint: 40 records were committed, the query stopped gracefully, then the
-same query restarted and consumed only 60 new records. Final reconciliation
-found exactly 100 unique Kafka `(partition, offset)` locations; the automated
-demonstration completed in 4 minutes 47.67 seconds.
-
-## Verified full MySQL publication
-
-The accepted HDFS aggregate was exported as a canonical complete snapshot and
-published to persistent MySQL 8.4 on 2026-08-13.
-
-| Measurement | Result |
-|---|---:|
-| Serving rows | 3,203 |
-| Successful response records | 1,310,068 |
-| Success tokens | 2,145,511 |
-| Canonical SHA-256 | `9b0f4a3afc33e73461414ff2d60a2653e32a5fdbcfe8a810b8b2b42525fcc0be` |
-| Initial publication wall time | 1.66 s |
-| Repeat unchanged check | 1.25 s |
-| Initial maximum RSS | 32,028 KiB |
-
-The initial publication produced ID
-`126fa842-3721-4233-991f-8fd3b9e22929`. Publishing the identical snapshot a
-second time returned `unchanged` with the same ID and no metric increase.
-Stopping and recreating the container preserved the snapshot in the named
-volume, and post-restart validation matched all expected totals and the hash.
-
-## Limitations
-
-- The local broker is a single combined controller/broker with replication
-  factor one; it does not demonstrate broker failover or high availability.
-- No authentication, TLS, or schema registry is configured in this local phase.
-- The in-memory duplicate detector stores every event ID; the measured full run
-  used about 571 MiB maximum RSS. Larger datasets should use a bounded or
-  external deduplication strategy.
-- MySQL is a single local container without TLS, replication, automated backup,
-  or high availability. Snapshot replacement is transactionally protected, but
-  this does not claim a distributed exactly-once guarantee.
-- The API is read-only and intended for local analytics; authentication, TLS,
-  rate limiting, and production deployment hardening are not configured.
-- The frontend production bundle still exceeds Vite's default 500 kB warning
-  threshold; modular ECharts imports reduced its minified size from about
-  1.36 MB to about 799 kB, while route-level code splitting remains a possible
-  optimization.
-- The full Spark benchmark used one worker and one HDFS DataNode; it demonstrates
-  pipeline correctness and recovery semantics, not horizontal scalability or
-  infrastructure failover.
+The dashboard includes overview metrics, airline rankings, airline and
+system-wide hourly timelines, an airline activity heatmap, and publication
+health information.

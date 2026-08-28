@@ -9,3 +9,5 @@ infrastructure/mysql/.env.example text eol=lf
 infrastructure/mysql/init/*.sql text eol=lf
 # Python source files must use Unix line endings.
 *.py text eol=lf
+# Markdown documentation must use Unix line endings.
+*.md text eol=lf
